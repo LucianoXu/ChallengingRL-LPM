@@ -34,6 +34,7 @@ import datetime as dt
 import json
 import os
 import random
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -95,7 +96,7 @@ class JSONLRecorder:
     def _write(self, obj: dict) -> None:
         self._f.write(json.dumps(obj) + "\n")
 
-    def log_step(self, action_id: int, info: dict) -> None:
+    def log_step(self, action_id: int, reward: float, cum_reward: float, info: dict) -> None:
         self._t += 1
         self._write({
             "type": "step",
@@ -107,6 +108,8 @@ class JSONLRecorder:
             "pos": list(info.get("pos", [])),
             "dir_deg": float(np.degrees(info.get("dir", 0.0))),
             "visited_count": int(info.get("visited_state", 0)),
+            "reward": float(reward),
+            "cum_reward": float(cum_reward),
         })
 
     def reset_episode(self, info: dict) -> None:
@@ -194,6 +197,8 @@ def render_frame(
             f"Sticky actions: {'ON' if state['sticky_on'] else 'OFF'}",
             f"Last action   : {state['last_action_str']}",
             f"Sticky kicked : {'YES' if state['last_sticky'] else 'no'}",
+            f"Reward (ext)  : {state['last_reward']:.2f}  (always 0 — paper)",
+            f"Cum. reward   : {state['cum_reward']:.2f}",
             "",
             "Keys: Arrows/WASD move    N=look-at-TV",
             "      R=reset    T=sticky    M=minimap",
@@ -223,6 +228,28 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _bring_to_front_macos() -> None:
+    """Foreground the running Python process on macOS via osascript.
+
+    Pygame on macOS opens the window in the background by default, which makes
+    the tool annoying to launch (you have to alt-tab to find it). AppleScript
+    can target our PID directly; no extra Python deps required.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        subprocess.run(
+            [
+                "osascript", "-e",
+                f'tell application "System Events" to set frontmost of '
+                f'(first process whose unix id is {os.getpid()}) to true',
+            ],
+            check=False, capture_output=True, timeout=2,
+        )
+    except Exception as e:  # pragma: no cover
+        print(f"[warn] could not bring window to front: {e}", file=sys.stderr)
+
+
 def main() -> int:
     args = parse_args()
     env = build_env(args.variant, args.seed)
@@ -232,6 +259,8 @@ def main() -> int:
     pygame.display.set_caption(f"LPM Miniworld Play — {args.variant}")
     pygame.key.set_repeat(150, 80)
     screen = pygame.display.set_mode((WIN_W, WIN_H))
+    if not args.headless:
+        _bring_to_front_macos()
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Menlo,Monaco,Courier", 14)
     big_font = pygame.font.SysFont("Menlo,Monaco,Courier", 18, bold=True)
@@ -261,6 +290,8 @@ def main() -> int:
         "episode": 0,
         "last_action_str": "—",
         "last_sticky": False,
+        "last_reward": 0.0,
+        "cum_reward": 0.0,
     }
     show_side = True
 
@@ -284,6 +315,8 @@ def main() -> int:
                         state["step_count"] = 0
                         state["last_action_str"] = "(reset)"
                         state["last_sticky"] = False
+                        state["last_reward"] = 0.0
+                        state["cum_reward"] = 0.0
                     elif event.key == pygame.K_t:
                         if hasattr(env.unwrapped, "sticky_prob"):
                             env.unwrapped.sticky_prob = 0.0 if env.unwrapped.sticky_prob > 0 else 0.25
@@ -299,8 +332,10 @@ def main() -> int:
                     elif event.key in KEY_TO_ACTION and not state["paused"]:
                         action = KEY_TO_ACTION[event.key]
                         obs, r, term, trunc, info = env.step(action)
+                        state["last_reward"] = float(r)
+                        state["cum_reward"] += float(r)
                         if recorder is not None:
-                            recorder.log_step(action, info)
+                            recorder.log_step(action, r, state["cum_reward"], info)
                         state["step_count"] += 1
                         state["last_action_str"] = ACTION_NAMES[action]
                         state["last_sticky"] = bool(info.get("sticky_replayed", False))
@@ -310,13 +345,17 @@ def main() -> int:
                                 recorder.reset_episode(info)
                             state["episode"] += 1
                             state["step_count"] = 0
+                            state["last_reward"] = 0.0
+                            state["cum_reward"] = 0.0
 
             # Headless smoke test: take a few random actions, then snapshot + quit.
             if headless_budget is not None and headless_budget > 0:
                 action = random.choice([0, 1, 2, 3])
                 obs, r, term, trunc, info = env.step(action)
+                state["last_reward"] = float(r)
+                state["cum_reward"] += float(r)
                 if recorder is not None:
-                    recorder.log_step(action, info)
+                    recorder.log_step(action, r, state["cum_reward"], info)
                 state["step_count"] += 1
                 state["last_action_str"] = ACTION_NAMES[action]
                 state["last_sticky"] = bool(info.get("sticky_replayed", False))
