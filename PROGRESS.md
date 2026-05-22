@@ -36,13 +36,13 @@
   - Acceptance: script runs 10 000 env steps end-to-end on `noisy_tv × lpm` without crashing; CSV is non-empty.
 
 - [ ] **P1.3 — Sanity sweep: 50 k env steps × 1 seed × all cells**
-  - 3 variants × 4 intrinsic = 12 runs. Estimated ~30 min/run on Apple Silicon = ~6 h total wall-clock.
+  - 3 variants × 4 intrinsic = 12 runs. **Estimated wall-clock per run: ~1 min (optimistic, 8 vector workers) to ~10 min (single-env fallback).** Measured env-step rate: 1714 steps/sec for `noisy_tv` single-env; PPO+LPM overhead expected to drop equivalent throughput to ~900–5000 steps/sec depending on parallelism efficiency. Total sweep: 15 min – 2 h.
   - Driver: `experiments/phase1/run_sanity.sh`.
   - Deliverable: 12 CSV logs in `experiments/phase1/runs/sanity/`. Plot script `plot_visited.py` produces `visited_count vs env_step` figure with 4 lines (intrinsic methods) per variant subplot.
   - Acceptance: at 50 k steps, `LPM > {ICM, RND}` on `noisy_tv` and `action_noise` directionally (no statistical test yet).
 
 - [ ] **P1.4 — Production runs: 500 k env steps × 3 seeds × all cells**
-  - 12 cells × 3 seeds = 36 runs. Estimated ~5 h/run = ~7–8 days if serial. Plan: run two cells in parallel (~4 days), or cap at 250 k steps if 500 k is infeasible.
+  - 12 cells × 3 seeds = 36 runs. **Estimated ~2.5–10 min per 500 k-step run**; total sweep 1.5–6 h wall-clock.
   - Deliverable: 36 CSV logs in `experiments/phase1/runs/main/`. Updated figure with mean ± 1 SD ribbons.
   - Acceptance: visual reproduction of the qualitative pattern in paper Figure 4-5 (LPM dominates on noisy variants, all methods comparable on `nonoise`). Compute paired t-test on final `visited_count` between LPM and the strongest baseline.
 
@@ -87,7 +87,7 @@
   - Acceptance: at 500 k steps all four methods reach `ep_return > 0.5`; differences statistically inconclusive (this is H1 — we *expect* no significant difference).
 
 - [ ] **P2.5 — Run H2 + H3 main (Dynamic-Obstacles-8x8)**
-  - 4 intrinsic methods × 3 seeds = 12 runs, 1 M steps each. Estimated ~10 h/run = ~5 days. Cap at 500 k if needed.
+  - 4 intrinsic methods × 3 seeds = 12 runs, 1 M steps each. **Estimated ~5–20 min per run on MiniGrid** (MiniGrid env step rate is much faster than Miniworld — no 3D rendering); total sweep 1–4 h.
   - Tracked metrics per run: `ep_return`, `ep_length`, `death_rate` (= terminations not caused by reaching goal), `visited_cells_unique`.
   - Deliverable: `experiments/phase2/runs/h2h3_dynobs/`. Three figures:
     - ep_return convergence (4 methods, mean ± SD)
@@ -121,7 +121,7 @@
 | risk | likelihood | mitigation |
 |---|---|---|
 | Upstream LPM / RND / ICM model code is CUDA-only or has shape assumptions that block CPU port | medium | P1.1 catches this early; budget 1–2 days of porting buffer |
-| Total training wall-clock exceeds available time | high | Cap at 250–500 k steps per run; reduce seeds from 3 to 2 if needed; skip P1.4 production sweep if P1.3 sanity already shows pattern |
+| Total training wall-clock exceeds available time | low | Measured 1714 env-steps/sec for `noisy_tv` single-env; full Phase 1 production sweep estimated 1.5–6 h, not days. Multi-process vector env needs a one-line fix (auto-import `miniworld_play.envs` in worker subprocess) — currently fails with `NameNotFound`. |
 | MiniGrid 84×84 RGB obs causes intrinsic-reward CNN to behave differently than on Miniworld 160×120 | low | Try MiniGrid's native 7×7×3 symbolic obs with a small MLP-based intrinsic model as fallback |
 | Phase 2 hypothesis H3 fails (LPM also gets curiosity-trapped by moving balls) | medium | This is **still a publishable negative result** — write up as "LPM's robustness is limited to unstructured noise; structured stochasticity defeats it." Reviewer CKoM hinted at this. |
 | `wandb` dependency in upstream code blocks running on machines without an account | low | Patch upstream `wandb.init` to a no-op when `WANDB_MODE=offline` or remove the call in our copy |
