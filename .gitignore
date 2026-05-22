@@ -24,8 +24,10 @@ env/
 
 # Local / generated experiment artifacts
 LPM_exploration/Noisy_MNIST/data/
+LPM_exploration/Miniworld/data/
 LPM_exploration/Noisy_MNIST/exploration_methods_*.pdf
 LPM_exploration/Noisy_MNIST/exploration_methods_*.npy
+miniworld_play/recordings/
 LPM_exploration/**/wandb/
 LPM_exploration/**/logs/
 LPM_exploration/**/runs/
