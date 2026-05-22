@@ -17,7 +17,9 @@ The workspace is in **early-reproduction phase**: the official LPM implementatio
   - `Challenging Topics WS26.pdf` — the course's topic-introduction slide deck.
   - `Hou2026_LPM_BeyondNoisyTVs.pdf` — Hou, An, Du (UC Merced, ICLR 2026), *Beyond Noisy-TVs: Noise-Robust Exploration Via Learning Progress Monitoring* (arXiv:2509.25438). **The paper this project will reproduce + extend.** Proposes LPM: intrinsic reward = improvement of the dynamics model, not prediction error → robust against the noisy-TV failure mode of RND/ICM. Code lives in `LPM_exploration/`. Envs studied: Noisy-MNIST, 3D maze (160×120 RGB), Atari.
 - `reports/` — kickoff slides and project reports we author. Currently contains `reports/report1/` with the kickoff Keynote/PowerPoint + the Python scripts that generated its assets.
-- `LPM_exploration/.venv/` — uv-created Python 3.11 venv used for Noisy-MNIST and (eventually) the heavier experiments. **Not committed** (gitignored).
+- `miniworld_play/` — **our** keyboard-controlled play tool for the paper's three Miniworld variants (`nonoise`, `noisy_tv`, `action_noise`). `envs.py` ports the upstream `MazeEnv` geometry (the 4-room hand-designed layout, the 25% sticky-action probability, the green-pixel→random-RGB transform on the noise wall) faithfully; `play.py` wraps it in a pygame window with first-person + top-down panes and writes a JSONL trajectory per session. Run via `./LPM_exploration/.venv/bin/python miniworld_play/play.py --variant noisy_tv`. Headless smoke test: same command with `--headless`.
+- `docs/superpowers/specs/` — design specs from `superpowers:brainstorming` sessions. Used when the user delegates a non-trivial implementation.
+- `LPM_exploration/.venv/` — uv-created Python 3.11 venv used for Noisy-MNIST, the Miniworld play tool, and (eventually) the heavier experiments. **Not committed** (gitignored). Includes: `torch`, `numpy`, `matplotlib`, `tqdm`, `python-mnist`, `jupyter`, `gymnasium`, `miniworld`, `pygame`, `Pillow`, `torchvision`.
 
 ## State of implementation
 
