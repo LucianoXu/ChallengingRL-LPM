@@ -50,3 +50,28 @@ gunzip -f *.gz && cd ../..
   --output mnist_curiosity_executed.ipynb \
   --ExecutePreprocessor.timeout=1800
 ```
+
+## Playing the Miniworld variants by hand
+
+`miniworld_play/` is our keyboard-controlled tool for the paper's three Miniworld
+scenarios (faithful port of the upstream 4-room maze: 25% sticky actions, green-pixel
+→ random-RGB transform on the noise wall). Useful for sanity-checking geometry and
+seeing what the noisy-TV failure mode actually looks like from the agent's POV.
+
+```bash
+# headline noisy-TV scenario (sticky actions + random-RGB noise wall)
+./LPM_exploration/.venv/bin/python miniworld_play/play.py --variant noisy_tv
+
+# baseline without noise or sticky actions
+./LPM_exploration/.venv/bin/python miniworld_play/play.py --variant nonoise
+
+# action-conditioned noise (press N to "look at the noisy TV")
+./LPM_exploration/.venv/bin/python miniworld_play/play.py --variant action_noise
+
+# headless smoke test: 50 random steps, save a screenshot, exit
+./LPM_exploration/.venv/bin/python miniworld_play/play.py --variant noisy_tv --headless
+```
+
+Keys: arrows / WASD to move, N for the noisy-TV action, R reset, T toggle stickiness,
+M toggle side panel, SPACE pause, F12 screenshot, Q / ESC quit. Each session writes
+a JSONL trajectory to `miniworld_play/recordings/`.
