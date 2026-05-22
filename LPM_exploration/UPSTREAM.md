@@ -24,4 +24,12 @@ Any files we modify or add inside `LPM_exploration/` (e.g. fixes, configs,
 new ablation scripts) should be noted here so reviewers can tell what is
 ours vs. what is upstream.
 
-- *(none yet)*
+- **2026-05-22:** The Miniworld `MazeEnv` geometry (the 4-room layout,
+  agent spawn, action semantics, sticky-action probability, and
+  green-pixel→random RGB transform) has been ported into
+  `../miniworld_play/envs.py` so a human can play the three variants by
+  keyboard. The upstream notebooks were left untouched; the port is
+  faithful, including the upstream `R<800` mask quirk (vestigial since
+  uint8 max is 255). The `nonoise` upstream notebook depends on a missing
+  `n_shape.py` module (not in upstream), so its `NoNoiseEnv` was
+  synthesised from the geometry shared with the other two variants.
