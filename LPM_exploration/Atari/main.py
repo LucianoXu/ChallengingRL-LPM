@@ -45,6 +45,15 @@ except ModuleNotFoundError:  # local fix: eme.py absent in snapshot (baseline on
     EffectiveMetricExploration = None
 
 import matplotlib.pyplot as plt
+
+def epsilon_greedy(action, epsilon, n_actions):
+    """With prob epsilon (per env) replace the policy action with a uniform-random action."""
+    if epsilon <= 0.0:
+        return action
+    mask = torch.rand(action.shape[0], 1, device=action.device) < epsilon
+    rand = torch.randint(0, n_actions, action.shape, device=action.device, dtype=action.dtype)
+    return torch.where(mask, rand, action)
+
 def show_image(obs_normal):
     
     # Extract displayable frames
@@ -428,6 +437,8 @@ def main():
                 value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
                     (rollouts.obs[step] - obs_mean) / (obs_std + 1e-8), rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step])
+            if args.epsilon > 0.0:
+                action = epsilon_greedy(action, args.epsilon, envs.action_space.n)
             # print("Action selected...")
             # It causes problem otherwise
             if args.env_name == 'MarioBrosNoFrameskip-v4':
