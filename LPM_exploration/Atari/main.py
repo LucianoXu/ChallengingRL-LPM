@@ -196,12 +196,11 @@ def main():
         intr_ret_rms = RunningMeanStd()
         intr_ret = np.zeros((args.num_processes, 1))
         
-        if args.use_dones:
-            ext_coeff = 1. 
-            int_coeff = 1e-3  # Start with smaller coefficient for AMA
-        else:
-            ext_coeff = 0. 
-            int_coeff = 1.
+        # local fix: was `if use_dones: ext=1,int=1e-3 else ext=0,int=1` (pure
+        # intrinsic / inconsistent). For a fair comparison ALL methods use
+        # r = ext + beta*int, matching the rnd/icm branch above.
+        ext_coeff = 1.
+        int_coeff = args.beta
 
         train_model = True
 

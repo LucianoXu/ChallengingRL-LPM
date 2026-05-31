@@ -66,6 +66,27 @@ ours vs. what is upstream.
   GIF/MP4 or shows a live pygame window (`--live`). Supports the `--noisy` CIFAR
   variant. Trained checkpoints live under the gitignored `Atari/trained_models/`.
 
+- **2026-05-31 — Atari RND/ICM/AMA smoke-test fixes (exploration-baseline comparison).**
+  Goal: get `--algo {rnd,icm,ama} --beta 1` to reach the training loop and log sane
+  episode scores on `MsPacmanNoFrameskip-v4`. Findings:
+  1. `Atari/exploration/models/RND.py` — runs **unmodified**. Random target + predictor
+     (no decoder/Sigmoid, no `/255`), uses the passed `device`. Smoke: exit 0, sane
+     `ep_score_mean` ~197–269.
+  2. `Atari/exploration/models/icm.py` — runs **unmodified**. Forward+inverse models on
+     signed normalized features, no decoder/Sigmoid/`/255`, uses `device`. Smoke: exit 0,
+     `ep_score_mean` ~205–376.
+  3. `Atari/exploration/models/ama.py` — runs **unmodified**. The pix2pix UNet decoder
+     uses Tanh on intermediate deconvs but **no activation on the final `deconv3`**, so the
+     reconstruction `mu` is unbounded — correct for the signed N(0,1) target (no Sigmoid bug
+     unlike LPM's improve.py). Uses `device`. Smoke: exit 0, `ep_score_mean` ~215–356. (Raw
+     intrinsic reward `mse - predicted_variance` is large/signed by construction; episode
+     scores are unaffected since ext_coeff=1.)
+  4. `Atari/main.py` (ama branch, ~L199) — replaced the `if args.use_dones: ext=1,int=1e-3
+     else ext=0,int=1` coefficient block with `ext_coeff=1.; int_coeff=args.beta` (marked
+     `# local fix:`) so AMA uses `r = ext + beta*int` consistently with the rnd/icm branch
+     for a fair comparison. (The default `--use-dones` False path had set `ext_coeff=0.`,
+     i.e. pure-intrinsic — episodes would still log but the policy ignored game score.)
+
 - **2026-05-31 — `Atari/pacman_play.py` (our addition).** Human keyboard player for
   Ms Pac-Man (pygame), same spirit as `../miniworld_play/play.py`. Arrows/WASD move
   (diagonals supported), R restart, Q/Esc quit; `--noisy` exposes the CIFAR idle
