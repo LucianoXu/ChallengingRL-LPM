@@ -43,3 +43,5 @@ LPM_exploration/Atari/data/
 *.pt
 *.pth
 LPM_exploration/Atari/trained_models/
+LPM_exploration/Atari/experiments/results/
+LPM_exploration/Atari/experiments/figures/
