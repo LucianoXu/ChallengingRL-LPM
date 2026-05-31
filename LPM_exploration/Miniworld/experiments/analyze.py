@@ -88,6 +88,30 @@ def run(results_dir, positions_dir, figures_dir, n_windows=5):
     fig.tight_layout()
     fig.savefig(os.path.join(figures_dir, "fig_time_at_wall.png"), dpi=130); plt.close(fig)
 
+    # --- noisy-TV fixation (action_noise only): share of steps spent on the
+    #     "stare at the TV" action 4. The pure pixel-error method should fixate. ---
+    tv_rows = []
+    for r in rows:
+        if r["variant"] != "action_noise":
+            continue
+        npz = os.path.join(positions_dir, f"{r['method']}-{r['variant']}-s{r['seed']}.npz")
+        if not os.path.exists(npz):
+            continue
+        a = np.load(npz)["action"][1:]  # drop the initial -1 sentinel
+        tv_rows.append({"method": r["method"],
+                        "tv_share": float((a == 4).mean()) if len(a) else 0.0})
+    if tv_rows:
+        tdf = pd.DataFrame(tv_rows).groupby("method")["tv_share"].agg(["mean", "std"])
+        tdf.to_csv(os.path.join(figures_dir, "table_tv_fixation.csv"))
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.bar(tdf.index, tdf["mean"], yerr=tdf["std"].fillna(0), capsize=4)
+        ax.axhline(0.2, color="gray", ls=":", label="uniform (1/5)")
+        ax.set_ylabel("share of steps = action 4 (noisy TV)")
+        ax.set_title("Noisy-TV fixation under action_noise")
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        fig.savefig(os.path.join(figures_dir, "fig_tv_fixation.png"), dpi=130); plt.close(fig)
+
     # --- heatmap evolution (one fig per variant per mode), lowest seed present ---
     for v in variants:
         per_method = {}
