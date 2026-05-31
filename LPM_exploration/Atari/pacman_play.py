@@ -30,22 +30,36 @@ import gymnasium as gym
 import ale_py
 gym.register_envs(ale_py)
 
-from stable_baselines3.common.atari_wrappers import MaxAndSkipEnv
+class Frameskip(gym.Wrapper):
+    """Repeat the chosen action for `skip` game frames (sum reward, last obs).
 
-try:
-    from exploration.noisy_wrapper import NoisyTVEnvWrapperCIFAR
-    from exploration.cifar import create_cifar_function_simple
-except Exception:
-    NoisyTVEnvWrapperCIFAR = None
+    Deliberately avoids stable_baselines3.common.atari_wrappers.MaxAndSkipEnv:
+    importing it pulls in cv2, which ships a second SDL2 that clashes with
+    pygame's on macOS ('mysterious crashes'). This keeps the human player
+    dependency-light (gymnasium + ale_py + pygame only).
+    """
+    def __init__(self, env, skip):
+        super().__init__(env)
+        self.skip = skip
+
+    def step(self, action):
+        total, obs, info, term, trunc = 0.0, None, {}, False, False
+        for _ in range(self.skip):
+            obs, r, term, trunc, info = self.env.step(action)
+            total += r
+            if term or trunc:
+                break
+        return obs, total, term, trunc, info
 
 
 def build_env(env_name, frameskip, noisy, randop):
     env = gym.make(env_name, render_mode="rgb_array", max_episode_steps=10_000_000)
     if frameskip > 1:
-        env = MaxAndSkipEnv(env, skip=frameskip)
+        env = Frameskip(env, frameskip)
     if noisy:
-        if NoisyTVEnvWrapperCIFAR is None:
-            raise RuntimeError("noisy wrapper unavailable")
+        # lazy import: CIFAR (+cv2) is only loaded when the noisy variant is requested
+        from exploration.noisy_wrapper import NoisyTVEnvWrapperCIFAR
+        from exploration.cifar import create_cifar_function_simple
         env = NoisyTVEnvWrapperCIFAR(env, create_cifar_function_simple(), randop)
     return env
 
@@ -117,7 +131,6 @@ def play(args):
     pygame.key.set_repeat()  # we poll held keys ourselves
     font = pygame.font.SysFont("monospace", 14, bold=True)
     big = pygame.font.SysFont("monospace", 28, bold=True)
-    K = pygame.locals
     clock = pygame.time.Clock()
 
     obs, info = _reset(env, args.seed)
@@ -139,7 +152,7 @@ def play(args):
                     obs, info = _reset(env); score = 0.0; steps = 0; gameover = False
 
         if not gameover:
-            a = keys_to_action(pygame.key.get_pressed(), name_to_idx, pygame.locals)
+            a = keys_to_action(pygame.key.get_pressed(), name_to_idx, pygame)
             obs, r, done, info = _step(env, a)
             score += r; steps += 1
             best = max(best, int(score))
