@@ -121,10 +121,12 @@ def main():
     if hasattr(args, 'noisy') and args.noisy == True:
         print("creat noisy env")
         envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
-                         args.gamma, args.log_dir, device, False, noisy=True, num_noop_actions=args.noop, num_random_actions=args.randop)
+                         args.gamma, args.log_dir, device, False, noisy=True, num_noop_actions=args.noop, num_random_actions=args.randop,
+                         sticky_prob=args.sticky_prob)
     else:
         envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
-                         args.gamma, args.log_dir, device, False, noisy=False, num_noop_actions=args.noop)
+                         args.gamma, args.log_dir, device, False, noisy=False, num_noop_actions=args.noop,
+                         sticky_prob=args.sticky_prob)
 
     train_model = False
     is_vision = len(envs.observation_space.shape) > 1

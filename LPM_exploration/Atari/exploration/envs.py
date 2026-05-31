@@ -139,15 +139,18 @@ class ReducedActionWrapper(gym.ActionWrapper):
         # Map the reduced action to original action space
         return self.action_map[action]
 
-def make_env(env_id, seed, rank, log_dir, allow_early_resets, noisy=False, get_cifar=None, 
-             num_random_actions=1, num_noop_actions=0):
+def make_env(env_id, seed, rank, log_dir, allow_early_resets, noisy=False, get_cifar=None,
+             num_random_actions=1, num_noop_actions=0, sticky_prob=None):
     def _thunk():
         aer = allow_early_resets
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         else:
-            env = gym.make(env_id, max_episode_steps=10000000)
+            if sticky_prob is not None:
+                env = gym.make(env_id, max_episode_steps=10000000, repeat_action_probability=sticky_prob)
+            else:
+                env = gym.make(env_id, max_episode_steps=10000000)
         
         print("env.spec.id", env.spec.id)
         is_atari = (hasattr(gym.envs, 'atari') or env.spec.id.startswith('ALE/') or True)
@@ -203,15 +206,16 @@ def make_vec_envs(env_name,
                   log_dir,
                   device,
                   allow_early_resets,
-                  num_frame_stack=None, 
+                  num_frame_stack=None,
                   noisy=False,
                   num_random_actions=3,
-                  num_noop_actions=0):
+                  num_noop_actions=0,
+                  sticky_prob=None):
     get_cifar = create_cifar_function_simple()
     envs = [
-        make_env(env_name, seed, i, log_dir, allow_early_resets, 
+        make_env(env_name, seed, i, log_dir, allow_early_resets,
                 noisy=noisy, get_cifar=get_cifar, num_random_actions=num_random_actions,
-                num_noop_actions=num_noop_actions)
+                num_noop_actions=num_noop_actions, sticky_prob=sticky_prob)
         for i in range(num_processes)
     ]
 
