@@ -58,3 +58,10 @@ ours vs. what is upstream.
   `improve.py:228` has the `/255` pixel normalization commented out;
   `run.sh` launches `--algo eme` (not LPM) on the clean variant with a hardcoded
   `device='cuda'`. See the project notes / analysis for the full list.
+
+- **2026-05-31 — `Atari/play_lpm.py` (our addition).** A playback/visualization tool
+  (not upstream) to watch a trained `ppo-improvement` agent play. Loads a saved
+  policy checkpoint, reuses the repo's own `ProcessFrame84` + SB3 wrappers + the
+  checkpoint's obs mean/std so preprocessing matches training, and either records a
+  GIF/MP4 or shows a live pygame window (`--live`). Supports the `--noisy` CIFAR
+  variant. Trained checkpoints live under the gitignored `Atari/trained_models/`.
