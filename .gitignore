@@ -34,3 +34,12 @@ LPM_exploration/**/runs/
 LPM_exploration/**/models/*.pt
 LPM_exploration/**/models/*.pth
 LPM_exploration/**/__pycache__/
+
+# Downloaded datasets (CIFAR-10 for the Atari noisy-TV wrapper, etc.)
+/data/
+LPM_exploration/Atari/data/
+
+# Trained model checkpoints (large binaries — keep out of git)
+*.pt
+*.pth
+LPM_exploration/Atari/trained_models/

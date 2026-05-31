@@ -21,7 +21,10 @@ from exploration.storage import RolloutStorage
 
 # Remove LBS import and add our curiosity models
 from stable_baselines3.common.running_mean_std import RunningMeanStd
-import exploration.environments
+try:
+    import exploration.environments  # local fix: 'environments' subpackage absent in snapshot (MountainCar/Ant only)
+except ModuleNotFoundError:
+    pass
 from exploration.algo.random import RandomAgent, RandomPolicy
 
 # Import our curiosity models
@@ -32,8 +35,14 @@ from exploration.models.RND import RandomNetworkDistillationCuriosity
 from exploration.models.icm import IntrinsicCuriosityModuleCuriosity
 from exploration.models.ensemble import EnsembleDisagreementCuriosity
 # from exploration.models.tdd import TemporalDistanceDensityCuriosity
-from exploration.models.tdd2 import TemporalDistanceDensityCuriosity
-from exploration.models.eme import EffectiveMetricExploration
+try:
+    from exploration.models.tdd2 import TemporalDistanceDensityCuriosity
+except ModuleNotFoundError:  # local fix: tdd2.py absent in snapshot (baseline only, unused by LPM)
+    TemporalDistanceDensityCuriosity = None
+try:
+    from exploration.models.eme import EffectiveMetricExploration
+except ModuleNotFoundError:  # local fix: eme.py absent in snapshot (baseline only, unused by LPM)
+    EffectiveMetricExploration = None
 
 import matplotlib.pyplot as plt
 def show_image(obs_normal):
@@ -92,7 +101,14 @@ def main():
     # writer = SummaryWriter(logdir=log_dir)
 
     torch.set_num_threads(1)
-    device = torch.device("cuda:0" if args.cuda else "cpu")
+    # local fix: add Apple-Silicon MPS support (upstream only had cuda/cpu)
+    if args.cuda:
+        device = torch.device("cuda:0")
+    elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    print(f"[device] using {device}")
 
     # Environment and Policy 
     if hasattr(args, 'noisy') and args.noisy == True:
@@ -133,8 +149,8 @@ def main():
         intr_ret_rms = RunningMeanStd()
         intr_ret = np.zeros((args.num_processes, 1))
 
-        ext_coeff = 1. # 1 # Sparse tasks: 1000
-        int_coeff = 0.  # test
+        ext_coeff = 1.
+        int_coeff = args.beta  # local fix: was 0.0 ('# test') which DISABLED the intrinsic reward; use beta (default 1) so LPM actually trains with curiosity
 
         train_model = True
 
@@ -194,11 +210,11 @@ def main():
     elif args.algo == 'ppo-improvement':
         # Initialize our LearningProgressCuriosity model
         model = LearningProgressCuriosity(
-            obs_size=obs_dim, 
-            act_size=act_dim, 
-            state_size=state_dim, 
+            obs_size=obs_dim,
+            act_size=act_dim,
+            state_size=state_dim,
             device=device,
-            eta=0.4,
+            eta=1.0,  # local fix: was 0.4, which made reward = 0.4*E[err]-err < 0 (anti-exploration); paper Eq.3 has no eta (=1.0): r = E[prev_err] - curr_err
             pred_lr=args.lr,
             uncertainty_lr=args.lr  # Higher LR for uncertainty model
         )

@@ -7,6 +7,14 @@ import torch
 from gymnasium.spaces.box import Box
 from gymnasium.spaces import Discrete
 
+# local fix: ALE Atari envs must be registered in every (sub)process, else
+# gym.make('MsPacmanNoFrameskip-v4') raises NameNotFound inside SubprocVecEnv workers.
+import ale_py
+try:
+    gym.register_envs(ale_py)
+except Exception:
+    pass
+
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.atari_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv, WarpFrame, ClipRewardEnv)
@@ -179,7 +187,7 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets, noisy=False, get_c
                 allow_early_resets=aer)
         
         # Apply grayscale if it's an RGB image
-        if len(obs_shape) == 3 and obs_shape[0] == 3:  # Check if it has 3 channels (RGB)
+        if len(env.observation_space.shape) == 3 and env.observation_space.shape[0] == 3:  # local fix: obs_shape was unbound (NameError); use env.observation_space.shape (already (84,84,1) after ProcessFrame84, so this is False)
             print(f"Applying grayscale conversion for env {rank}")
             env = GrayscaleResizeWrapper(env)
             print(f"After grayscale - Env {rank} - Observation space shape: {env.observation_space.shape}")
@@ -564,7 +572,7 @@ class ProcessFrame84(gym.ObservationWrapper):
     def __init__(self, env, crop=True):
         self.crop = crop
         super(ProcessFrame84, self).__init__(env)
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(84, 84, 1), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.uint8)  # local fix: channel-first so frame-stack -> (4,84,84) for the CNN
 
     def observation(self, obs):
         return ProcessFrame84.process(obs, crop=self.crop)
@@ -584,7 +592,7 @@ class ProcessFrame84(gym.ObservationWrapper):
         resized_screen = np.array(Image.fromarray(img).resize(size,
                                                               resample=Image.BILINEAR), dtype=np.uint8)
         x_t = resized_screen[18:102, :] if crop else resized_screen
-        x_t = np.reshape(x_t, [84, 84, 1])
+        x_t = np.reshape(x_t, [1, 84, 84])  # local fix: channel-first (C,H,W)
         return x_t.astype(np.uint8)
 
 class AddRandomStateToInfo(gym.Wrapper):

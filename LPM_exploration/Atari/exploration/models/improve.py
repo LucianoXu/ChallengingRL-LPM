@@ -92,7 +92,8 @@ class MSEPredictionModel(nn.Module):
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
             nn.ConvTranspose2d(16, channels, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+            # local fix: removed nn.Sigmoid() — obs are mean/std-normalized (signed) upstream
+            # (main.py), so a [0,1] Sigmoid output cannot reconstruct the target and floors the MSE.
             nn.Upsample(size=(height, width), mode='bilinear', align_corners=False)
         )
 
