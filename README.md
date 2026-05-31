@@ -25,9 +25,13 @@ ChallengingRL/
 - **Noisy-MNIST toy experiment** (the paper's intro figure): reproduces qualitatively
   on Apple Silicon CPU in a few minutes. MSE-based intrinsic reward is fooled by
   stochasticity (Stoch ≈ 10× Det); LPM keeps Det > Stoch with bounded magnitude.
-- **Miniworld / Atari / Montezuma** pipelines: not yet exercised. They depend on legacy
-  `gym` (not `gymnasium`) + `stable_baselines3 ≤ 1.8` + ALE ROMs; large runs need
-  GPU compute that isn't available locally.
+- **Miniworld 3D-maze exploration comparison** (`LPM_exploration/Miniworld/experiments/`):
+  a CLI-driven A2C pipeline extracted from the upstream maze notebooks, comparing
+  intrinsic-motivation methods (LPM / RND / ICM / MSE / none) across the three noise
+  variants, with a new coverage-heatmap-evolution statistic. Runs downscaled on Apple
+  Silicon CPU. See below.
+- **Atari (Ms Pac-Man)** exploration comparison: see `LPM_exploration/Atari/experiments/`.
+- **Montezuma** full-scale pipeline: not yet exercised; large runs need cluster/cloud GPU.
 
 ## Reproducing the Noisy-MNIST smoke test
 
@@ -75,3 +79,32 @@ seeing what the noisy-TV failure mode actually looks like from the agent's POV.
 Keys: arrows / WASD to move, N for the noisy-TV action, R reset, T toggle stickiness,
 M toggle side panel, SPACE pause, F12 screenshot, Q / ESC quit. Each session writes
 a JSONL trajectory to `miniworld_play/recordings/`.
+
+## Reproducing the 3D-maze exploration comparison
+
+`LPM_exploration/Miniworld/experiments/` extracts the maze notebooks' A2C engine into a
+CLI trainer and compares exploration methods on coverage. The maze has **no extrinsic
+reward**, so "exploration ability" is pure spatial coverage — and the noisy-TV failure
+mode is geometric: the random-RGB noise wall at z≈8 separates the lower rooms from the
+far room4, so a method fooled by noise lingers at the wall while LPM should push past it.
+
+```bash
+cd LPM_exploration/Miniworld/experiments
+
+# run the grid (5 methods x 3 variants x 2 seeds = 30 runs, ~1.5h on CPU; resumable)
+PYTHONPATH=. PYTORCH_ENABLE_MPS_FALLBACK=1 \
+  ../../.venv/bin/python run_grid.py --steps 20000 --seeds 1 2 --device cpu
+
+# aggregate -> table + coverage curves + beyond-wall / time-at-wall + heatmap evolution
+PYTHONPATH=. ../../.venv/bin/python analyze.py    # writes figures/
+
+# fast headless feasibility / throughput check, and the unit tests
+PYTHONPATH=. ../../.venv/bin/python calibrate.py --variant noisy_tv --steps 300
+PYTHONPATH=. ../../.venv/bin/python -m pytest tests/ -q
+```
+
+The **new statistic** is `fig_heatmap_evolution_<variant>_{density,frontier}.png`: a
+rows=method × columns=training-window grid of top-down occupancy heatmaps showing how
+each method's exploration spreads (or stalls at the noise wall) over time. Per-run CSVs,
+position logs, and figures land in the gitignored `results/`, `positions/`, `figures/`.
+The experiment design is written up in `latex_notes/2026-05-31-maze-exploration-design.tex`.

@@ -45,3 +45,8 @@ LPM_exploration/Atari/data/
 LPM_exploration/Atari/trained_models/
 LPM_exploration/Atari/experiments/results/
 LPM_exploration/Atari/experiments/figures/
+
+# Maze exploration experiment artifacts (regenerable)
+LPM_exploration/Miniworld/experiments/results/
+LPM_exploration/Miniworld/experiments/positions/
+LPM_exploration/Miniworld/experiments/figures/

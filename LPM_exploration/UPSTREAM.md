@@ -91,3 +91,38 @@ ours vs. what is upstream.
   Ms Pac-Man (pygame), same spirit as `../miniworld_play/play.py`. Arrows/WASD move
   (diagonals supported), R restart, Q/Esc quit; `--noisy` exposes the CIFAR idle
   actions for a human to trigger; `--headless` runs a no-window self-test.
+
+- **2026-05-31 — `Miniworld/experiments/` (our addition): the maze exploration
+  comparison.** The upstream Miniworld experiment exists only as three Jupyter
+  notebooks (`miniworld_hallway_{nonoise,with_noisyTV,with_action_based_noise}.ipynb`)
+  with an embedded **A2C** (RMSprop, GAE γ=0.99/λ=0.95, single-epoch update every 64
+  steps), single environment, 50k steps/run, no CLI. We extracted that engine into an
+  importable, CLI-driven package to compare intrinsic-motivation methods across the
+  three noise variants and to add a per-step position log for coverage heatmaps. The
+  notebooks were left untouched. Specifics:
+  1. `models.py` — `CNNFeatureExtractor`, the decoder, the LPM prediction +
+     uncertainty nets, and the LPM reward `clip(eta*E[err] - err, <=0.5)` (eta=1.0)
+     are lifted **verbatim** from the notebooks, parameterised by `device` instead of
+     a module global. `MSEModel` is the notebook's decoder next-state-prediction
+     curiosity (the pure noisy-TV victim).
+  2. **New methods not in the notebooks:** `ICMModel` (canonical inverse+forward
+     dynamics on the shared encoder — the notebook's "CuriosityModel" is *not* real
+     ICM, just a decoder) and `RNDModel` (frozen random target + trainable predictor).
+     Both are built on the same `CNNFeatureExtractor` for comparability.
+  3. **Uniform reward combination.** The notebooks combine rewards with inconsistent
+     ad-hoc offsets (`-0.002`, `-0.005`, `min(·,1.0)`) yet a single `lambda=0.1`
+     despite very different reward scales. For a *fair* comparison `a2c.py` instead
+     applies **running mean/std normalisation** (Welford, RND-style) to every method's
+     intrinsic reward, then `combined = lambda_intrinsic * normalise(r_int)`
+     (extrinsic is 0 in this env). Toggle via `A2CAgent(normalize_intrinsic=...)`.
+  4. **Env reused, not re-ported:** `maze_envs.make_env` imports the three variant
+     classes from `../../miniworld_play/envs.py` (single source of truth for geometry).
+  5. **Downscaling for local compute:** runs use `--steps 20000` (vs upstream 50k) and
+     default to CPU (`--device cpu`) because the decoder methods (LPM/MSE) are faster
+     on CPU than MPS, where `ConvTranspose2d` falls back off-device. `--obs-scale` can
+     reduce the 160×120 render resolution if needed (faithful default is 1.0;
+     `action_noise` requires scale 1.0 since its CIFAR resize targets 160×120).
+  Run with `run_grid.py` → per-run CSV + position `.npz` → `analyze.py` produces the
+  coverage table, coverage curves, the beyond-wall / time-at-wall figures, and the
+  coverage-heatmap-evolution figures. Artifacts under `results/`, `positions/`,
+  `figures/` are gitignored.
