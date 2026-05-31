@@ -110,7 +110,14 @@ def main():
         device = torch.device("cpu")
     print(f"[device] using {device}")
 
-    # Environment and Policy 
+    csv_file = None
+    if args.csv_log:
+        os.makedirs(os.path.dirname(os.path.abspath(args.csv_log)), exist_ok=True)
+        csv_file = open(args.csv_log, "w", buffering=1)
+        csv_file.write("update,frames,fps,ep_score_mean,ep_score_std,ep_len_mean,"
+                       "int_rew,ext_rew,pred_loss,unc_loss,dist_entropy,value_loss,action_loss\n")
+
+    # Environment and Policy
     if hasattr(args, 'noisy') and args.noisy == True:
         print("creat noisy env")
         envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
@@ -625,12 +632,24 @@ def main():
             if train_model:
                 print(" IntRew: {:.3f}±{:.3f} ExtRew: {:.3f}±{:.3f} RollRew: {:.3f}±{:.3f}; RollRet: {:.3f}±{:.3f}"
                     .format(curiosity.mean(), curiosity.std(), ext_reward.mean(), ext_reward.std(), rollouts.rewards.mean(), rollouts.rewards.std(), rollouts.returns.mean(), rollouts.returns.std() ))
-                
+
                 # Log our model losses - different naming for AMA
                 if args.algo == 'ama':
                     print(" AMALoss: {:.3f}".format(model_pred_loss))
                 else:
                     print(" PredLoss: {:.3f} UncertaintyLoss: {:.3f}".format(model_pred_loss, model_uncertainty_loss))
+
+            if csv_file is not None:
+                _int = float(curiosity.mean()) if train_model else 0.0
+                _ext = float(ext_reward.mean()) if train_model else float(rollouts.rewards.mean())
+                _pl = float(model_pred_loss) if train_model else 0.0
+                _ul = float(model_uncertainty_loss) if train_model else 0.0
+                csv_file.write(f"{j},{int(total_num_steps)},"
+                               f"{int(args.num_steps*args.num_processes/(end-start))},"
+                               f"{np.mean(episode_rewards):.3f},{np.std(episode_rewards):.3f},"
+                               f"{np.mean(episode_lengths):.1f},{_int:.4f},{_ext:.4f},"
+                               f"{_pl:.4f},{_ul:.4f},{float(dist_entropy):.4f},"
+                               f"{float(value_loss):.4f},{float(action_loss):.4f}\n")
             
             if args.env_name in ['MountainCarSparse-v0',  'MountainCarStochastic-Frozen',  'MountainCarStochastic-Evolving', 'HalfCheetahSparse-v3']:
 

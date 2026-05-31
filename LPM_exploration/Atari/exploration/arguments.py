@@ -181,6 +181,9 @@ def get_args():
         help='AMA lambda parameter - uncertainty budget (default: 1.0)')
     parser.add_argument('--noop', type=int, default=0, help='Add extra NOOP to action space')
     parser.add_argument('--noisy', type=bool, default=False, help='Add noisy cifar')
+    parser.add_argument('--csv-log', default=None, help='path to write a per-update metrics CSV')
+    parser.add_argument('--epsilon', type=float, default=0.0, help='epsilon-greedy action probability over the PPO policy (0 = pure PPO/softmax)')
+    parser.add_argument('--sticky-prob', type=float, default=None, help='ALE repeat_action_probability (sticky actions); None = env default')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
