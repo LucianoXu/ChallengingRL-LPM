@@ -290,7 +290,7 @@ to filter run_ids, --num-env-steps to override (default 1,000,000).
 import argparse, itertools, os, subprocess, sys
 
 ATARI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = os.path.join(os.path.dirname(os.path.dirname(ATARI)), ".venv", "bin", "python")  # LPM_exploration/.venv
+PY = os.path.join(os.path.dirname(ATARI), ".venv", "bin", "python")  # LPM_exploration/.venv
 
 # method label -> (algo, extra args)
 METHODS = {
