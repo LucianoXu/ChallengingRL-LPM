@@ -65,3 +65,8 @@ ours vs. what is upstream.
   checkpoint's obs mean/std so preprocessing matches training, and either records a
   GIF/MP4 or shows a live pygame window (`--live`). Supports the `--noisy` CIFAR
   variant. Trained checkpoints live under the gitignored `Atari/trained_models/`.
+
+- **2026-05-31 — `Atari/pacman_play.py` (our addition).** Human keyboard player for
+  Ms Pac-Man (pygame), same spirit as `../miniworld_play/play.py`. Arrows/WASD move
+  (diagonals supported), R restart, Q/Esc quit; `--noisy` exposes the CIFAR idle
+  actions for a human to trigger; `--headless` runs a no-window self-test.
