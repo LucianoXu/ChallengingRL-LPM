@@ -1,0 +1,146 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\title{\textbf{Comparing Exploration Algorithms on Ms.\ Pac-Man}\\
+\large A Course-Project Experiment Design\\
+\normalsize \emph{Challenging Problems in Reinforcement Learning} (SS~2026)\\
+\normalsize Topic: Exploration vs.\ Exploitation}
+\author{}
+\date{2026-05-31}
+
+\newcommand{\score}{S}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent We compare six exploration mechanisms---classical action-selection rules and deep
+intrinsic-motivation methods, including Learning Progress Monitoring (LPM)---on the Atari
+\textsc{Ms.\ Pac-Man} environment, measure their relative strength, and analyse \emph{why} they
+differ. The study is built on the LPM codebase of Hou, An \& Du (2026), \emph{Beyond Noisy-TVs:
+Noise-Robust Exploration via Learning Progress Monitoring}. Two questions drive the design:
+\textbf{(RQ1)} how robust is each method to an injected noisy-TV, and \textbf{(RQ2)} does LPM's
+advantage on \emph{clean} Ms.\ Pac-Man grow with environment stochasticity---a probe of the
+hypothesis that the game's random ghost movement already acts as aleatoric noise.
+All methods share one PPO base so that observed differences are attributable to the exploration
+mechanism rather than the base learner.
+\end{abstract}
+
+\section{Motivation and research questions}
+The course topic is the exploration--exploitation trade-off. Classical exploration
+(\(\varepsilon\)-greedy, softmax/Boltzmann, UCB, Thompson sampling) was designed for bandit and
+value-based settings; deep RL instead uses intrinsic-motivation bonuses (prediction error, novelty,
+learning progress). The \emph{noisy-TV} problem is the canonical failure mode of prediction-error
+exploration: an unlearnable source of randomness produces perpetually high prediction error, so a
+curiosity-driven agent fixates on it. LPM rewards the \emph{improvement} of its dynamics model
+rather than the error level, and is therefore noise-robust by construction.
+
+\begin{description}[leftmargin=2.2em,style=nextline]
+  \item[RQ1 (noise robustness, reproduction).] Under an action-triggered noisy-TV, which methods
+  collapse and which survive? How large is LPM's advantage over prediction-error curiosity (RND,
+  ICM) and over a method explicitly built to filter aleatoric noise (AMA)?
+  \item[RQ2 (stochasticity attribution, novelty).] LPM appears to win even on \emph{clean}
+  Ms.\ Pac-Man. Hypothesis: the game's random ghost movement acts as aleatoric noise that fools
+  prediction-error methods. Because the ghost AI is fixed in the ROM and cannot be tuned, we probe
+  the \emph{general} claim---``LPM's advantage grows with environment stochasticity''---using ALE
+  sticky actions (\texttt{repeat\_action\_probability}) as a controllable stochasticity knob.
+\end{description}
+
+\section{Methods}
+All six trained methods use the same PPO base. Intrinsic-motivation methods add an intrinsic reward
+with weight \(\beta\); the per-step training reward is
+\begin{equation}
+  r_t \;=\; r_t^{\,e} \;+\; \beta\, r_t^{\,i},
+  \label{eq:reward}
+\end{equation}
+with \(\beta=1\) throughout. The two classical baselines run on the same PPO base: plain PPO is the
+entropy-regularised stochastic policy (i.e.\ softmax/Boltzmann exploration), and
+\(\varepsilon\)-greedy adds a uniform-random action layer with probability \(\varepsilon=0.1\).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llp{6.4cm}@{}}
+\toprule
+\textbf{Class} & \textbf{Method} & \textbf{Mechanism (intrinsic reward \(r^{i}\) or rule)} \\
+\midrule
+Learning progress        & \textbf{LPM} & improvement of the dynamics model, \(\mathbb{E}\!\left[\varepsilon^{(\tau-1)}-\varepsilon^{(\tau)}\right]\) \\
+Prediction error         & RND          & error vs.\ a fixed random target network \\
+Prediction error (feat.) & ICM          & inverse-dynamics feature prediction error \\
+Noise-robust curiosity   & AMA          & curiosity with aleatoric-uncertainty filtering \\
+Classical (softmax)      & PPO          & entropy-regularised stochastic policy (no \(r^{i}\)) \\
+Classical (\(\varepsilon\)-greedy) & PPO + \(\varepsilon\) & random action w.p.\ \(\varepsilon=0.1\) \\
+\bottomrule
+\end{tabular}
+\caption{The six trained methods. UCB and Thompson sampling are \emph{discussion-only}: neither has
+a scalable deep-RL drop-in (UCB needs visit counts/uncertainty; Thompson needs posterior sampling),
+which itself illustrates why count-based bonuses and LPM are their practical descendants.}
+\end{table}
+
+\section{Experimental design}
+Two manipulation axes are kept separate to bound the run count.
+
+\paragraph{RQ1 --- noise axis.} Each method is run in the \emph{clean} game and the \emph{noisy}
+variant (action-noise: two idle actions replace the observation with a random CIFAR-10 image),
+\(\times\,3\) seeds: \(6\times2\times3 = 36\) runs.
+
+\paragraph{RQ2 --- stochasticity sweep (clean only).} ALE sticky-action probability
+\(p \in \{0.0, 0.25, 0.5\}\); the \(p=0.0\) point reuses the RQ1 clean runs. The sweep covers the
+four most diagnostic methods (LPM, RND, ICM, plain PPO) \(\times\,\{0.25,0.5\}\,\times\,3\) seeds
+\(=24\) runs.
+
+\paragraph{Budget.} \(\approx 60\) runs \(\times \sim\!20\) min on Apple-Silicon MPS
+\(\approx 20\) h. Each run trains \(10^{6}\) aggregate frames, 16 parallel environments, PPO with
+learning rate \(10^{-4}\), clip \(0.1\), 3 epochs, 8 minibatches, \(\gamma=0.99\), GAE.
+
+\section{Metrics}
+Let \(\score\) denote the final extrinsic game score (the mean episode return over the last
+\(10\%\) of updates), reported as mean\(\,\pm\,\)std over seeds.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{RQ1 headline --- noise-robustness drop:}
+  \begin{equation}
+    \mathrm{Drop} \;=\; \frac{\score_{\mathrm{clean}} - \score_{\mathrm{noisy}}}{\score_{\mathrm{clean}}}.
+  \end{equation}
+  Prediction: LPM (and AMA) smallest; RND/ICM largest. Reproduces the paper's central result.
+  \item \textbf{RQ2 headline --- stochasticity-advantage curve:}
+  \(\;\score_{\mathrm{LPM}}(p) - \score_{\mathrm{RND}}(p)\) and the same vs.\ ICM, as functions of
+  the sticky probability \(p\). Prediction: increasing \(\Rightarrow\) supports the hypothesis.
+  \item \textbf{Attribution (auxiliary):} learning curves (\(\score\) vs.\ frames), and the
+  per-method intrinsic-reward trajectory. LPM's \(r^{i}\) should decay toward \(0\) as the world
+  model converges; RND/ICM under noise should stay elevated---evidence of being ``stuck on noise.''
+  Intrinsic-reward magnitudes are \emph{not} comparable across methods (different scales), so only
+  within-method trends are interpreted.
+\end{itemize}
+
+\section{Infrastructure and reproducibility}
+The embedded LPM Atari snapshot did not run out of the box; eight import/shape/correctness fixes
+were required (channel-first frames, ALE registration in subprocess workers, enabling the intrinsic
+reward, removing a Sigmoid decoder incompatible with normalised targets, MPS device support; all
+logged in \texttt{LPM\_exploration/UPSTREAM.md}). Each run writes a per-update CSV
+(\texttt{update, frames, fps, ep\_score\_mean, ep\_score\_std, ep\_len\_mean, int\_rew, ext\_rew,
+pred\_loss, unc\_loss, dist\_entropy, value\_loss, action\_loss}). A grid runner launches all runs
+sequentially on MPS (resumable: completed CSVs are skipped); an analysis script aggregates the CSVs
+into the results table and three figures.
+
+\section{Limitations (stated up front)}
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Sticky actions \(\neq\) ghost randomness.} Sticky actions are a controllable
+  \emph{proxy} for aleatoric stochasticity, not an isolation of ghost behaviour. RQ2 therefore tests
+  the general ``stochasticity \(\to\) LPM edge'' claim, with ghost randomness as qualitative
+  motivation only.
+  \item \textbf{Short budget, small sample.} \(10^{6}\) frames \(\times\,3\) seeds yields
+  \emph{qualitative trends}, not rigorous statistical significance. (At this scale a human casually
+  reaches \(\sim\!7000\) while these agents reach \(\sim\!500\); maximising score is not the goal.)
+  \item \textbf{No per-state localisation.} We log aggregate intrinsic reward, not its distribution
+  over game states, so the noisy-TV mechanism is shown indirectly.
+  \item \textbf{Episodic-bonus family absent.} EME and TDD/EDT model files are missing from the
+  snapshot, so the comparison spans the curiosity, learning-progress, and classical families, not
+  episodic bonuses.
+\end{enumerate}
+
+\end{document}
