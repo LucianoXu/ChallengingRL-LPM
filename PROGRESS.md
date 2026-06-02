@@ -1,8 +1,12 @@
+# Progress Meeting
 
+## Time: May 30
 
-Progress Meeting:
+Yingte: I discovered a interesting question: In the Atari game, LPM is performing better in the clean Ms PacMan setting. Theoretically speaking, LPM should not have the advantage in the clean setting. The reason may be that the random movement of Ghost can be considered as kind of randomness or noise. But this is worth exploring.
 
-Time: May 22
+Other kinds of measures: Understand the exploration evolvement in 3D maze.
+
+## Time: May 22
 
 Our current plan for the project:
 
