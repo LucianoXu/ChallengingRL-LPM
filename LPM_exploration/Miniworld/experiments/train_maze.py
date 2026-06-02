@@ -42,8 +42,15 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--update-frequency", type=int, default=64)
-    ap.add_argument("--lambda-intrinsic", type=float, default=0.1)
+    ap.add_argument("--lambda-intrinsic", type=float, default=1.0)   # paper C.2: λ=1
+    ap.add_argument("--entropy-coef", type=float, default=0.03)      # paper C.2: 0.03
+    ap.add_argument("--normalize-intrinsic", action="store_true",
+                    help="running mean/std-normalize intrinsic reward (our deviation; "
+                         "paper C.2 uses raw lambda*r, so this is OFF by default)")
     ap.add_argument("--obs-scale", type=float, default=1.0)
+    ap.add_argument("--random-policy", action="store_true",
+                    help="ignore the A2C policy and pick actions uniformly at random "
+                         "(no learning at all); the pure random-walk control")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--csv-log", required=True)
     ap.add_argument("--pos-log", required=True)
@@ -61,7 +68,9 @@ def main():
     model = M.build_model(args.method, input_shape, num_actions, device)
     policy = A2CNetwork(input_shape, num_actions).to(device)
     agent = A2CAgent(policy, num_actions, device=device,
-                     lambda_intrinsic=args.lambda_intrinsic)
+                     lambda_intrinsic=args.lambda_intrinsic,
+                     entropy_coef=args.entropy_coef,
+                     normalize_intrinsic=args.normalize_intrinsic)
 
     os.makedirs(os.path.dirname(args.csv_log) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(args.pos_log) or ".", exist_ok=True)
@@ -79,23 +88,31 @@ def main():
 
     update_i = 0; t0 = time.time(); int_accum = []
     for step in range(1, args.steps + 1):
-        a, lp, v = agent.select_action(state)
+        if args.random_policy:
+            a, lp, v = random.randrange(num_actions), 0.0, 0.0
+        else:
+            a, lp, v = agent.select_action(state)
         ns, r, term, trunc, info = env.step(a)
         done = term or trunc
-        ir = model.reward(state, ns, a)
+        ir = 0.0
+        if not args.random_policy:
+            ir = model.reward(state, ns, a)
+            agent.memory.add(state, a, r, ir, ns, done, lp, v)
         int_accum.append(ir)
-        agent.memory.add(state, a, r, ir, ns, done, lp, v)
         xs.append(info["pos"][0]); zs.append(info["pos"][1])
         acts.append(int(info.get("action_id", a)))
         sticky.append(bool(info.get("sticky_replayed", False)))
         state = ns
 
         if step % args.update_frequency == 0:
-            mloss = model.update(
-                torch.FloatTensor(np.array(agent.memory.states)).to(device),
-                torch.FloatTensor(np.array(agent.memory.next_states)).to(device),
-                torch.LongTensor(agent.memory.actions).to(device))
-            aloss = agent.update()
+            if args.random_policy:
+                mloss, aloss = {}, {}
+            else:
+                mloss = model.update(
+                    torch.FloatTensor(np.array(agent.memory.states)).to(device),
+                    torch.FloatTensor(np.array(agent.memory.next_states)).to(device),
+                    torch.LongTensor(agent.memory.actions).to(device))
+                aloss = agent.update()
             update_i += 1
             if update_i % args.log_interval == 0:
                 cm = cov.coverage_metrics(np.array(xs), np.array(zs))

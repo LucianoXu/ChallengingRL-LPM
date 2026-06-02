@@ -112,19 +112,21 @@ def run(results_dir, positions_dir, figures_dir, n_windows=5):
         fig.tight_layout()
         fig.savefig(os.path.join(figures_dir, "fig_tv_fixation.png"), dpi=130); plt.close(fig)
 
-    # --- heatmap evolution (one fig per variant per mode), lowest seed present ---
+    # --- heatmap evolution (one fig per variant per mode), averaged over all seeds ---
     for v in variants:
         per_method = {}
         for meth in methods:
-            cand = [r for r in rows if r["method"] == meth and r["variant"] == v]
-            if not cand:
-                continue
-            seed = min(c["seed"] for c in cand)
-            npz = os.path.join(positions_dir, f"{meth}-{v}-s{seed}.npz")
-            if not os.path.exists(npz):
-                continue
-            d = np.load(npz)
-            per_method[meth] = (d["step"], d["x"], d["z"])
+            seeds = sorted(c["seed"] for c in rows
+                           if c["method"] == meth and c["variant"] == v)
+            runs = []
+            for seed in seeds:
+                npz = os.path.join(positions_dir, f"{meth}-{v}-s{seed}.npz")
+                if not os.path.exists(npz):
+                    continue
+                d = np.load(npz)
+                runs.append((d["step"], d["x"], d["z"]))
+            if runs:
+                per_method[meth] = runs
         if not per_method:
             continue
         for mode in ("density", "frontier"):

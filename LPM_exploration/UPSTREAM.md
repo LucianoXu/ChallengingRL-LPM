@@ -126,3 +126,72 @@ ours vs. what is upstream.
   coverage table, coverage curves, the beyond-wall / time-at-wall figures, and the
   coverage-heatmap-evolution figures. Artifacts under `results/`, `positions/`,
   `figures/` are gitignored.
+
+- **2026-06-02 — paper-faithful maze rerun on a 128-core Linux box (50k × 10 seeds).**
+  The original maze figures (`*_mac_20k/`, now backed up) were `--steps 20000 × 2 seeds`
+  on the user's Apple-Silicon Mac and did not separate the methods (NONE competitive
+  everywhere, between-seed std ≈ mean). Diagnosis: underpowered, not a code bug — the
+  `action_noise` noisy-TV result already proved the mechanism is correct. We re-ran the
+  full grid at the paper's actual maze budget (Fig.3 / §5.2: **50,000 exploration steps,
+  averaged over 10 seeds**) using the box's parallelism. Setup notes:
+  1. **New Linux venv** at `LPM_exploration/.venv` (uv, CPython 3.11): torch 2.12+cpu,
+     torchvision 0.27+cpu, gymnasium 1.3.0, miniworld 2.1.0, pyglet 1.5.31, pandas,
+     matplotlib. The Mac venv is gitignored / absent here.
+  2. **Headless render, no GPU:** set `PYGLET_HEADLESS=true` (pyglet EGL + Mesa
+     `libEGL_mesa` software GL). No DISPLAY / no xvfb needed. Also pin `LP_NUM_THREADS=1`
+     so llvmpipe doesn't oversubscribe when many workers run.
+  3. **Parallelism:** `run_grid.py --jobs 120 --threads-per-job 1` (5×3×10 = 150
+     independent runs). 1 thread/job is optimal — 2 threads only gave 1.25× per run, so
+     max-processes wins. Measured single-thread FPS: LPM ≈ 41, NONE ≈ 112, action_noise
+     ≈ 30. Makespan ≈ 35 min at ~92% user CPU, 0 failures, ~140 GB RAM peak (of 1.1 TB).
+  4. **CIFAR pre-staged:** download CIFAR-10 once before launch, else the 50 parallel
+     `action_noise` workers race on the same `download=True` target and corrupt it.
+  5. **Resume gotcha:** `run_grid.is_complete` keys on the position `.npz` existing, not
+     on step count, so the old 20k `positions/` were moved aside (→ `positions_mac_20k/`)
+     before the 50k rerun or they'd be skipped as "done".
+  Result (`figures/table_*.csv`): the **noisy-TV claim reproduces cleanly** — under
+  `action_noise`, MSE is trapped (coverage 0.024, TV-fixation 0.983±0.023) while LPM is
+  the best intrinsic method (coverage 0.623, TV-fixation 0.048±0.075, below uniform 0.2).
+  Two non-budget issues persist (config/geometry, not step count): (a) the no-intrinsic
+  NONE baseline stays competitive on raw coverage (0.62–0.70) because upstream
+  `entropy_coef=0.05` + per-batch return standardisation keep every policy near a uniform
+  random walk, which already covers this small 4-room maze well (the paper has no NONE
+  baseline); (b) the `noisy_tv` pixel-wall is a passable place, not an arresting action,
+  so it is a weak trap in this geometry and methods don't separate there.
+
+- **2026-06-02 (later) — aligned hyperparameters to the paper's Appendix C.2, not the
+  notebook.** The "NONE competitive / intrinsic signal doesn't separate coverage" finding
+  above traced to a hyperparameter mismatch: our defaults were taken from the upstream
+  *notebooks*, which **disagree with the paper's own Appendix C.2 (MiniWorld)**. C.2
+  specifies, for all methods: **intrinsic weight λ=1** (notebook used 0.1 → 10x too weak),
+  **entropy coefficient 0.03** (notebook used 0.05), and the combined reward is **raw
+  `extrinsic + λ·r_intrinsic`** with no running-std normalization (we had added Welford
+  normalization "for fairness"). Architecture, optimizer, LRs, γ, value/grad-clip,
+  update-freq, dynamics-LR (1e-3), and error-buffer (100) already matched C.2. We changed
+  the `a2c.py` / `train_maze.py` defaults to C.2 (`lambda_intrinsic=1.0`, `entropy_coef=0.03`,
+  `normalize_intrinsic=False`) and exposed `--entropy-coef` / `--normalize-intrinsic` flags
+  so the notebook config remains reproducible. Smoke check (LPM, `action_noise`): the early
+  `value_loss` spike is a transient that settles to ~1.0 by ~12 updates (same as before);
+  crucially the policy is now **directed** — action distribution `[0.06,0.15,0.72,0.06,0.008]`
+  (72% move-forward, 0.8% noisy-TV) with intermediate entropy, no longer pinned at ln5. The
+  50k×10-seed grid was re-run under C.2; the notebook-config results are backed up under
+  `*_notebook_50k/`. NB: λ=1 raw is faithful for the paper's own methods (LPM, MSE-decoder);
+  our added RND/ICM have different raw scales and may warrant separate handling for a strictly
+  fair cross-method coverage comparison.
+
+- **2026-06-02 (final) — uniform-random control, seed-averaged heatmaps, cleanup.**
+  1. `train_maze.py --random-policy` added: bypasses the A2C and samples actions uniformly at
+     random every step with no learning (skips reward/memory/updates), reusing the same
+     coverage/CSV/npz logging. It is the proper "does any of this beat chance?" control, distinct
+     from `none` (whose A2C policy is still shaped by entropy + value bootstrap). Result: the uniform
+     control covers the **most** in all three variants (nonoise 0.515, noisy_tv 0.688, action_noise
+     0.725), lowest variance, beating every trained policy incl. LPM — in this small extrinsic-free
+     maze coverage rewards randomness and any learned policy commits to a narrower walk. Uniform
+     TV-action share = 0.200 (the 1/5 sanity check). Noise robustness (LPM 0.4% vs MSE 87% fixation)
+     is unaffected and decoupled from coverage.
+  2. `heatmaps.py` / `analyze.py`: coverage-heatmap-evolution figures now **average over all seeds**
+     (density = mean per-cell step-count; frontier = fraction of seeds that ever visited each cell,
+     a 0-1 visit-probability map) instead of using seed 1.
+  3. Cleanup: the older backup result dirs (`*_mac_20k/`, `*_notebook_50k/`) were **deleted** — only
+     the C.2 results (`results/`, `positions/`, `figures/`, now incl. `uniform-*`) are kept. The
+     `latex_notes` design note was rewritten as a single C.2-only document.

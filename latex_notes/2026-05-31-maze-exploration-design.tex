@@ -8,11 +8,12 @@
 \usepackage{enumitem}
 
 \title{\textbf{Comparing Exploration Algorithms in the 3D Maze}\\
-\large A Course-Project Experiment Design + Coverage-Heatmap Evolution\\
+\large A Course-Project Reproduction under the Paper's Appendix~C.2 Settings\\
 \normalsize \emph{Challenging Problems in Reinforcement Learning} (SS~2026)\\
 \normalsize Topic: Exploration vs.\ Exploitation}
 \author{}
-\date{2026-05-31}
+\date{2026-05-31\\ \normalsize\emph{results updated 2026-06-02: Appendix-C.2 config
+($\lambda_i{=}1$, entropy $0.03$, raw reward), 6 policies $\times$ 3 variants $\times$ 10 seeds}}
 
 \newcommand{\cov}{C}
 
@@ -22,21 +23,23 @@
 \begin{abstract}
 \noindent We compare five exploration mechanisms---Learning Progress Monitoring (LPM), Random
 Network Distillation (RND), the Intrinsic Curiosity Module (ICM), a raw next-state prediction-error
-bonus (MSE), and a no-intrinsic A2C baseline (\textsc{none})---in the Miniworld 3D maze of Hou, An \&
-Du (2026), \emph{Beyond Noisy-TVs: Noise-Robust Exploration via Learning Progress Monitoring}. The
-maze emits \emph{no extrinsic reward}, so a method's quality is its \emph{spatial coverage}, and the
-noisy-TV failure mode is geometric: a random-RGB ``noise wall'' at $z\approx 8$ separates the two
-lower spawn rooms from the far room (room4), so a prediction-error agent fascinated by the wall
-never crosses it. Two questions drive the design: \textbf{(RQ1)} how much coverage---and in
-particular coverage \emph{past the wall}---does each method achieve under the clean vs.\ noisy
-variants, and \textbf{(RQ2)} how does the \emph{spatial distribution} of exploration \emph{evolve
-over training time}? RQ2 is answered by a new statistic we add to the LPM codebase: a
-coverage-heatmap-evolution figure. All methods share one A2C base so that observed differences are
-attributable to the exploration mechanism rather than the base learner. In a $30$-run downscaled
-study we find one clean reproduction---under action-triggered noise, the raw-pixel method fixates on
-the noisy TV $99\%$ of the time while LPM avoids it most ($2\%$)---alongside otherwise
-variance-dominated coverage at this budget; the heatmap-evolution statistic renders the spatial
-exploration dynamics clearly.
+bonus (MSE), and a no-intrinsic A2C baseline (\textsc{none})---plus a \emph{uniform-random control}
+(no learning at all) in the Miniworld 3D maze of Hou, An \& Du (2026), \emph{Beyond Noisy-TVs:
+Noise-Robust Exploration via Learning Progress Monitoring}. The maze emits \emph{no extrinsic
+reward}, so a method's quality is its \emph{spatial coverage}, and the noisy-TV failure mode is
+geometric: a random-RGB ``noise wall'' at $z\approx 8$ separates the two lower spawn rooms from the
+far room. We run the paper's exact Appendix~C.2 configuration ($\lambda_i{=}1$, entropy $0.03$, raw
+intrinsic reward) at the paper's budget ($5\times10^{4}$ steps $\times$ 10 seeds). Two findings
+stand out. \textbf{(1)} The paper's central claim---\emph{noise robustness}---reproduces cleanly and
+sharply: under action-triggered noise, LPM selects the noisy-TV action only $0.4\%$ of the time
+while the raw-pixel method (MSE) is trapped on it $87\%$ of the time and its coverage collapses.
+\textbf{(2)} On \emph{coverage}, however, no learned method clearly beats the pure uniform-random
+control: uniform covers the most in both noisy variants and ties the best (ICM) in the clean variant.
+In this small maze coverage rewards undirected randomness, and any learned policy (intrinsic or not)
+commits to a narrower walk that covers less. Thus the paper's ``LPM achieves the highest coverage''
+ranking does \emph{not} reproduce from the released maze code, while its noise-robustness
+claim---decoupled from coverage---does. A 10-seed-averaged, log-scaled occupancy-density figure
+renders the spatial dynamics.
 \end{abstract}
 
 \section{Motivation and research questions}
@@ -57,32 +60,35 @@ the thin grass-textured \emph{noise wall} (room3, $z\!\in\![8,8.1]$), and the la
   \item[RQ1 (coverage \& noise robustness, reproduction).] Under the noisy variants
   (\texttt{noisy\_tv}: random-RGB wall $+$ 25\% sticky actions; \texttt{action\_noise}: an action
   that shows a random CIFAR-10 image) vs.\ the clean control (\texttt{nonoise}), which methods keep
-  expanding coverage and which stall? How large is LPM's advantage in coverage \emph{past the wall}
-  over the prediction-error methods (MSE, ICM, RND)?
+  expanding coverage and which stall---and crucially, do any of them beat a \emph{uniform-random}
+  policy that does no learning at all?
   \item[RQ2 (spatial dynamics, novelty).] How does the spatial distribution of exploration evolve
-  over training? Do prediction-error methods concentrate occupancy at the noise wall over time while
-  LPM's coverage frontier advances into room4? We answer this with a coverage-heatmap-evolution
-  figure (rows: method; columns: training-time window).
+  over training? We answer this with a coverage-heatmap-evolution figure (rows: method; columns:
+  training-time window) \emph{averaged over all 10 seeds}.
 \end{description}
 
 \section{Methods}
-All five methods use the same A2C base (RMSprop, GAE with $\gamma=0.99$, $\lambda=0.95$, a
-single-epoch update every 64 steps, a Nature-style CNN over $160\times120$ RGB frames). Because the
-maze extrinsic reward is identically zero, the per-step training reward reduces to a normalised
-intrinsic term,
+All learned methods use the same A2C base, configured to the paper's Appendix~C.2 (MiniWorld):
+RMSprop, policy LR $0.01$, $\gamma=0.99$, GAE $\lambda=0.95$, value-loss coef.\ $0.5$, gradient
+clipping $0.5$, a single-epoch update every $64$ steps, dynamics-model LR $10^{-3}$, error-buffer
+size $100$, entropy coefficient $0.03$, and intrinsic weight $\lambda_i=1$, over a Nature-style CNN
+on $160\times120$ RGB frames. Because the maze extrinsic reward is identically zero, the per-step
+training reward is the \emph{raw} intrinsic term,
 \begin{equation}
-  r_t \;=\; \lambda_i \,\widehat{r}^{\,i}_t, \qquad
-  \widehat{r}^{\,i}_t \;=\; \frac{r^{\,i}_t - \mu_t}{\sigma_t + \epsilon},
+  r_t \;=\; r^{\text{ext}}_t + \lambda_i\, r^{\,i}_t \;=\; \lambda_i\, r^{\,i}_t,
+  \qquad \lambda_i = 1,
   \label{eq:reward}
 \end{equation}
-with $\lambda_i = 0.1$ and $(\mu_t,\sigma_t)$ a running mean/std of the raw intrinsic reward. This
-uniform running-std normalisation (RND-style) replaces the upstream notebooks' inconsistent, hand-set
-offsets so that a single $\lambda_i$ is comparable across methods; for \textsc{none}, $r_t\equiv 0$
-and the agent is a pure entropy-regularised random walker.
+with no running-std normalisation. (The upstream notebooks instead used $\lambda_i=0.1$, entropy
+$0.05$, and a normalised reward---settings that \emph{disagree} with the paper's own Appendix~C.2
+and make the intrinsic signal $10\times$ too weak; we follow C.2. The deviation is logged in
+\texttt{UPSTREAM.md}.) For \textsc{none}, $r_t\equiv 0$, so the A2C policy is still \emph{trained}
+(by the entropy bonus and value bootstrap) but receives no reward signal; the \emph{uniform} control
+is not trained at all---it samples actions $a\sim\mathrm{Uniform}\{0,\dots,4\}$ every step.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}llp{6.8cm}@{}}
+\begin{tabular}{@{}llp{6.4cm}@{}}
 \toprule
 \textbf{Class} & \textbf{Method} & \textbf{Mechanism (intrinsic reward $r^{i}$)} \\
 \midrule
@@ -90,122 +96,189 @@ Learning progress        & \textbf{LPM} & $\mathrm{clip}\!\big(\eta\,\mathbb{E}[
 Prediction error         & RND          & error of a predictor vs.\ a fixed random target network on the next frame \\
 Prediction error (feat.) & ICM          & forward-dynamics error in an inverse-dynamics feature space \\
 Prediction error (pixel) & MSE          & raw next-state pixel-prediction error (the pure noisy-TV victim) \\
-None (baseline)          & \textsc{none}& no intrinsic reward; entropy-regularised A2C random walk \\
+None (baseline)          & \textsc{none}& no intrinsic reward; A2C \emph{is} still trained (entropy + value bootstrap) \\
+Control                  & uniform      & $a\sim\mathrm{Uniform}\{0\dots4\}$; \emph{no learning} (pure random walk) \\
 \bottomrule
 \end{tabular}
-\caption{The five methods. LPM and MSE share the same pixel-decoder predictor, isolating the effect
+\caption{The six policies. LPM and MSE share the same pixel-decoder predictor, isolating the effect
 of the learning-progress signal vs.\ raw error. ICM and RND are canonical implementations added on
-the shared CNN encoder (the upstream notebooks' ``ICM'' was in fact a pixel decoder, and contained
-no RND).}
+the shared CNN encoder. The \emph{uniform} control is the proper ``does any of this beat chance?''
+baseline---distinct from \textsc{none}, whose policy is still shaped by training.}
 \end{table}
 
 \section{Experimental design}
-A single manipulation grid: method $\times$ variant $\times$ seed.
+A single manipulation grid: policy $\times$ variant $\times$ seed.
 
-\paragraph{Grid.} Five methods $\times$ three variants (\texttt{nonoise}, \texttt{noisy\_tv},
-\texttt{action\_noise}) $\times$ two seeds $=30$ runs. Each run is a single environment trained for
-$2\times10^{4}$ steps (downscaled from the upstream $5\times10^{4}$ for local compute).
+\paragraph{Grid.} Six policies (LPM, RND, ICM, MSE, \textsc{none}, uniform) $\times$ three variants
+(\texttt{nonoise}, \texttt{noisy\_tv}, \texttt{action\_noise}) $\times$ ten seeds $=180$ runs. Each
+run is a single environment trained for $5\times10^{4}$ steps---the paper's maze budget (Fig.~3 of
+Hou et al.\ trains for $5\times10^{4}$ exploration steps averaged over 10 seeds).
 
-\paragraph{Budget.} $30$ runs $\times \sim\!4$\,min (decoder methods) on Apple-Silicon CPU
-$\approx 1.5$\,h. Runs use CPU rather than MPS: the decoder methods (LPM, MSE) are \emph{faster} on
-CPU because \texttt{ConvTranspose2d} falls back off the MPS device. The grid is resumable (completed
-CSVs are skipped).
+\paragraph{Budget.} The runs are independent, so the grid is embarrassingly parallel: on a 128-core
+Linux box, \texttt{run\_grid.py --jobs 120 --threads-per-job 1} finishes the trained grid in
+$\approx\!35$\,min at $\sim\!92\%$ CPU (peak $\sim\!140$\,GB of 1.1\,TB RAM, 0 failures); the 30
+uniform runs add $<\!2$\,min. Single-environment A2C is a batch-size-1 forward pass, so one CPU
+thread per job is optimal (two threads gave only $1.25\times$ per run)---the speed-up comes from
+running many processes. Runs use CPU (the box has no GPU); the $160\times120$ frames render headless
+via Mesa EGL (\texttt{PYGLET\_HEADLESS=true}, \texttt{LP\_NUM\_THREADS=1}). The grid is
+resumable---a run's position \texttt{.npz} marks it complete.
 
 \section{Metrics}
 Coverage is measured on the maze's native $72\times48$ occupancy grid (cells of $0.25$ world units),
 restricted to the \emph{reachable} cells (the union of the four rooms; the empty corridor between the
 spawn rooms is excluded). Let the final value of a quantity be its mean over the last $10\%$ of
-logged updates, reported as mean$\,\pm\,$std over seeds.
+logged updates, reported as mean$\,\pm\,$std over the 10 seeds.
 
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{RQ1 headline --- beyond-wall coverage:}
-  $\cov_{\text{bw}} = (\text{visited reachable cells with } z\ge 8.1)/(\text{reachable cells with } z\ge 8.1)$,
-  i.e.\ the fraction of room4 explored. Prediction: under noise, MSE/ICM/RND collapse while LPM
-  stays high.
   \item \textbf{Total coverage:} $\cov = (\text{visited reachable cells})/(\text{reachable cells})$,
-  reported as a learning curve vs.\ frames.
-  \item \textbf{Time-at-wall:} fraction of steps with $z\in[7.5,8.5]$---a direct measure of
-  ``fascination with the noise.'' Prediction: highest for the pixel prediction-error methods under
-  \texttt{noisy\_tv}.
-  \item \textbf{RQ2 headline --- coverage-heatmap evolution (new statistic):} for each variant, a
-  rows(method)$\times$columns(training-window) grid of top-down occupancy heatmaps, in two views:
-  \emph{occupancy density} (log step-count per cell, revealing where the agent dwells) and
-  \emph{coverage frontier} (cells ever visited up to each window, revealing how the explored region
-  grows). The maze rooms and the $z=8$ wall line are overlaid for orientation.
+  reported both as a final number and as a learning curve vs.\ frames.
+  \item \textbf{TV-action share:} fraction of steps spent on the noisy-TV action (action~4) under
+  \texttt{action\_noise}---the direct measure of noisy-TV fixation. Prediction: highest for the pixel
+  prediction-error method (MSE), lowest for LPM, exactly $1/5$ for the uniform control.
+  \item \textbf{Coverage-heatmap evolution (averaged):} for each variant, a
+  rows(method)$\times$columns(training-window) grid of top-down occupancy heatmaps \emph{averaged
+  over all 10 seeds}. The primary view is \emph{occupancy density} = the mean per-cell visit count,
+  drawn on a single \emph{shared log colour scale} across all panels (a colorbar is overlaid). The
+  raw per-cell count spans $\sim\!0.1$ to $\sim\!10^{3}$---a few dwell/spin cells are visited
+  $1000\times$ while typical cells see $1$--$5$ visits---so a per-panel \emph{linear} scale (our
+  earlier figures) washed the path structure out; the shared log scale exposes both \emph{where} each
+  policy dwells and how much. A companion \emph{coverage-frontier} view (fraction of seeds that ever
+  visited each cell, $0$--$1$) is also produced. The maze rooms and the $z=8$ wall line are overlaid.
 \end{itemize}
 
-\section{Results (downscaled run)}
-We ran the full $5\times3\times2 = 30$-run grid at $2\times10^{4}$ steps on CPU
-($\approx$30\,min wall-clock). The results are \emph{qualitative}: at this budget the
-between-seed variance is large, so they should be read as trends, not significance tests.
+\section{Results}
+We ran the full $180$-run grid at $5\times10^{4}$ steps under the C.2 configuration. The
+single-environment A2C is high-variance (between-seed std $0.07$--$0.34$), so we flag which
+conclusions are robust.
 
-\paragraph{The clean positive: noisy-TV fixation under \texttt{action\_noise}.} The sharpest
-result is the textbook noisy-TV trap. In the \texttt{action\_noise} variant, action~4 replaces the
-observation with a random CIFAR-10 image. The raw-pixel predictor (MSE) is captured by it almost
-completely---it selects action~4 on $98.6\%\pm1.4\%$ of steps and visits only $\sim\!10$ of the
-$\sim\!1500$ reachable cells---while LPM selects it on just $2.0\%\pm1.7\%$ of steps, the
-\emph{lowest} of all methods and far below the $20\%$ uniform rate (Fig.~\ref{fig:tv}). LPM is
-noise-robust exactly as predicted: it does not reward the unlearnable image because its dynamics
-model cannot \emph{improve} on it. ICM ($15\%$) and the \textsc{none} baseline ($7\%$) sit between;
-RND is bimodal across seeds ($22\%\pm27\%$).
+\paragraph{Noise robustness reproduces---cleanly and sharply.} In \texttt{action\_noise}, action~4
+replaces the observation with a random CIFAR-10 image. LPM selects it on only $0.4\%\pm0.5\%$ of
+steps---the lowest possible---because its dynamics model cannot \emph{improve} on the unlearnable
+image, while the raw-pixel predictor MSE is trapped on it $87\%\pm17\%$ of the time and its coverage
+collapses to $0.12$ (Table~\ref{tab:tv}, Fig.~\ref{fig:tv}). The uniform control sits at exactly
+$0.200\pm0.002$ (the $1/5$ sanity check). This is the paper's central claim and it reproduces.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lc@{}}
 \toprule
-\textbf{Method} & \textbf{TV-action share} (action\_noise) & \textbf{Coverage} (action\_noise) \\
+\textbf{Policy} & \textbf{TV-action share} (\texttt{action\_noise}) \\
 \midrule
-\textbf{LPM} & $\mathbf{0.020 \pm 0.017}$ & $0.231 \pm 0.311$ \\
-\textsc{none}& $0.072 \pm 0.001$ & $0.345 \pm 0.043$ \\
-ICM          & $0.150 \pm 0.078$ & $0.420 \pm 0.006$ \\
-RND          & $0.220 \pm 0.271$ & $0.108 \pm 0.135$ \\
-\textbf{MSE} & $\mathbf{0.986 \pm 0.014}$ & $\mathbf{0.017 \pm 0.017}$ \\
+\textbf{LPM}  & $\mathbf{0.004 \pm 0.005}$ \\
+uniform       & $0.200 \pm 0.002$ \\
+\textsc{none} & $0.201 \pm 0.091$ \\
+ICM           & $0.563 \pm 0.215$ \\
+RND           & $0.634 \pm 0.347$ \\
+\textbf{MSE}  & $\mathbf{0.869 \pm 0.172}$ \\
 \bottomrule
 \end{tabular}
-\caption{Noisy-TV fixation. MSE (raw pixel error) is trapped by the random-image action and barely
-moves; LPM avoids it most strongly. Mean$\,\pm\,$std over 2 seeds.}
+\caption{Noisy-TV fixation under \texttt{action\_noise}, mean$\,\pm\,$std over 10 seeds. LPM
+essentially never stares at the noisy TV ($0.4\%$); MSE is trapped on it ($87\%$); the uniform
+control is at chance ($1/5$).}
 \label{tab:tv}
 \end{table}
 
-\paragraph{Coverage and beyond-the-wall.} The overall coverage ranking (Fig.~\ref{fig:curves}) does
-\emph{not} cleanly reproduce the paper's ``LPM dominates under noise'' headline. The no-intrinsic
-\textsc{none} baseline is competitive everywhere, indicating that at $2\times10^{4}$ steps with a
-single environment and entropy coefficient $0.05$, exploration is still largely driven by the policy's
-own stochasticity rather than the intrinsic signal. LPM is slow to start (its coverage frontier only
-advances in the later training windows) and ends mid-pack; MSE actually does well in the
-pixel-wall \texttt{noisy\_tv} variant (the wall noise is a \emph{place} it can move past, not an
-action that arrests it) yet collapses under \texttt{action\_noise} as above; RND collapses on the
-clean \texttt{nonoise} variant (one seed never leaves the spawn room). These are budget- and
-variance-dominated outcomes, not contradictions of the method---see Limitations.
+\paragraph{Coverage: no learned method clearly beats a uniform-random policy.} The headline coverage
+result is negative and important (Table~\ref{tab:cov}, Fig.~\ref{fig:curves}): the
+\emph{uniform-random} control covers the most in both noisy variants---and with the lowest
+variance---and is essentially tied for best in clean \texttt{nonoise} (uniform $0.515$ vs the nominal
+winner ICM $0.534$, a gap far inside the between-seed std). No learned policy, LPM included, clearly
+exceeds the no-learning control anywhere. Training \emph{reduces} coverage here: any learned policy
+(intrinsic-driven or the trained \textsc{none}) commits to a narrower, repetitive walk, whereas
+uniform thrashing maximally spreads through a small maze. Coverage in this setting therefore rewards
+\emph{randomness}, not directed exploration, and the paper's ``LPM achieves the highest coverage''
+ranking does \emph{not} reproduce. Note that noise-avoidance and coverage are \emph{decoupled}: under
+\texttt{action\_noise} the uniform policy wastes $20\%$ of its steps frozen on the TV yet still covers
+most ($0.725$), while LPM almost never touches the TV ($0.4\%$) yet covers far less on average
+($0.388$). (Uniform covers \emph{more} under the noisy variants than under clean \texttt{nonoise}
+because those variants add $25\%$ sticky actions, which create forward momentum and carry a random
+walker further.)
 
-\paragraph{The new statistic works.} The coverage-heatmap-evolution figure
-(Fig.~\ref{fig:heat}) makes the spatial story legible: ICM and MSE spread across and past the wall
-over successive windows, the \textsc{none} walk diffuses outward, and LPM's occupancy stays sparse
-until late. It is the most informative single view of \emph{where} and \emph{when} each method
-explores, and is the intended contribution of this experiment.
+\paragraph{ICM's higher mean coverage than LPM under \texttt{action\_noise} is an artefact, not better
+exploration.} It is tempting to read $\text{ICM}=0.446 > \text{LPM}=0.388$ as ``ICM explores better,''
+but that is wrong on two counts. First, ICM is \emph{fooled} by the noisy TV $56\%$ of the time
+(Table~\ref{tab:tv}) versus LPM's $0.4\%$---on the metric LPM is designed for, ICM fails badly.
+Second, the coverage gap is a \emph{variance artefact} of LPM's \emph{bimodal} behaviour at
+$\lambda_i{=}1$: of the 10 LPM seeds, $3$ collapse to a degenerate near-stationary policy
+($\approx\!0.02$--$0.04$ coverage) while the other $7$ cover $0.44$--$0.71$. Those 3 collapses pull
+LPM's \emph{mean} below ICM's, even though LPM's \emph{median} ($0.50$) is well \emph{above} ICM's
+($0.41$). ICM's tight band ($0.29$--$0.63$, std $0.13$) is precisely because its weaker intrinsic
+signal never commits---it neither collapses nor excels. So the mean-coverage ranking reflects policy
+variance and diffuseness, not exploration quality; the noise-robustness metric is the one that
+actually separates the methods, and there LPM wins decisively. (The occasional LPM collapse---the
+strong $\lambda_i{=}1$ reward locking an under-trained policy into a tight loop---is itself a finding
+worth a stability ablation.)
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Policy} & \texttt{nonoise} & \texttt{noisy\_tv} & \texttt{action\_noise} \\
+\midrule
+\textbf{uniform} & $0.515\,(0.16)$ & $\mathbf{0.688\,(0.12)}$ & $\mathbf{0.725\,(0.07)}$ \\
+\textsc{none}    & $0.389\,(0.31)$ & $0.652\,(0.22)$ & $0.590\,(0.23)$ \\
+LPM              & $0.337\,(0.22)$ & $0.389\,(0.30)$ & $0.388\,(0.30)$ \\
+MSE              & $0.356\,(0.26)$ & $0.539\,(0.20)$ & $0.123\,(0.06)$ \\
+ICM              & $\mathbf{0.534\,(0.23)}$ & $0.363\,(0.34)$ & $0.446\,(0.13)$ \\
+RND              & $0.501\,(0.07)$ & $0.311\,(0.34)$ & $0.192\,(0.17)$ \\
+\bottomrule
+\end{tabular}
+\caption{Coverage fraction, mean (std) over 10 seeds, under the C.2 configuration. Best per column in
+bold: ICM in clean \texttt{nonoise} ($0.534$, marginally above uniform $0.515$, well within the
+between-seed std), the uniform-random control in both noisy variants. Every learned method is at best
+tied with---never clearly above---the no-learning control. (LPM's \texttt{action\_noise} mean is
+depressed by a bimodal collapse; see text and its higher \emph{median}.)}
+\label{tab:cov}
+\end{table}
+
+\paragraph{Why the coverage ranking is not reproducible here (structural).}
+\begin{enumerate}[leftmargin=1.6em]
+  \item In a small maze ($\sim\!1500$ reachable cells) with no extrinsic reward, a random walk
+  already covers most cells, so there is nothing for directed exploration to add; committing to any
+  policy only narrows the walk. Intrinsic motivation targets \emph{sparse-reward, hard-exploration}
+  tasks (e.g.\ Montezuma's Revenge), not pure coverage of a small room.
+  \item The maze notebooks contain only LPM and pixel-curiosity---\emph{none} of Figure~3's baselines
+  (AMA, EDT, EME, Ensemble, IDF, RND). Figure~3 was produced by a fuller pipeline not in the released
+  maze code; our RND/ICM are our own additions on the shared encoder.
+  \item Single-environment A2C at $5\times10^{4}$ steps is dominated by between-seed variance
+  (std $\approx$ mean) and the curves have not plateaued at $50$k.
+\end{enumerate}
+
+\paragraph{Spatial dynamics (RQ2).} The 10-seed-averaged occupancy-density figure
+(Fig.~\ref{fig:heat}, \texttt{action\_noise}) makes the story legible once the shared log colour
+scale is used: brightness is the mean per-cell visit count. The \emph{uniform} row spreads broadly
+and fairly evenly across both spawn rooms and up past the wall, at moderate per-cell counts; the
+trained policies instead \emph{concentrate}---\textsc{none} and especially MSE show bright
+($10^{2}$--$10^{3}$) dwell/spin cells where the agent loops in place, with sparser coverage
+elsewhere, while LPM/ICM/RND are patchier and dimmer. This visualises directly why uniform covers
+more: training commits probability mass to a few revisited cells. The shared log scale is essential
+here---on the earlier per-panel linear scale these $1000\times$ dwell spikes saturated each panel and
+hid the surrounding path structure.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.62\textwidth]{../LPM_exploration/Miniworld/experiments/figures/fig_tv_fixation.png}
-\caption{Share of steps spent on the noisy-TV action (action~4) under \texttt{action\_noise}.
-MSE fixates ($\sim\!99\%$); LPM avoids it most ($\sim\!2\%$). Dotted line: uniform $1/5$.}
+\includegraphics[width=0.6\textwidth]{../LPM_exploration/Miniworld/experiments/figures/fig_tv_fixation.png}
+\caption{Share of steps spent on the noisy-TV action (action~4) under \texttt{action\_noise},
+mean$\pm$std over 10 seeds. LPM $\approx0.4\%$; MSE $\approx87\%$; uniform $=1/5$ (dotted line).}
 \label{fig:tv}
 \end{figure}
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth]{../LPM_exploration/Miniworld/experiments/figures/fig_coverage_curves.png}
-\caption{Reachable-cell coverage vs.\ frames, per variant (mean\,$\pm$\,std over 2 seeds). Note
-MSE's collapse under \texttt{action\_noise} (left) and RND's collapse under \texttt{nonoise} (right).}
+\caption{Reachable-cell coverage vs.\ frames, per variant (mean$\pm$std over 10 seeds). The
+uniform-random control is highest in every panel; all trained policies fall below it.}
 \label{fig:curves}
 \end{figure}
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\textwidth]{../LPM_exploration/Miniworld/experiments/figures/fig_heatmap_evolution_noisy_tv_density.png}
-\caption{Coverage-heatmap evolution (the new statistic), \texttt{noisy\_tv} variant. Rows: method;
-columns: five equal training-time windows. Brightness is $\log$ step-count per $0.25$-unit cell;
-the red dashed line is the noise wall ($z=8$) and the white rectangles are the reachable rooms.}
+\includegraphics[width=\textwidth]{../LPM_exploration/Miniworld/experiments/figures/fig_heatmap_evolution_action_noise_density.png}
+\caption{Occupancy-density evolution (\texttt{action\_noise}), \emph{averaged over all 10 seeds}.
+Rows: policy; columns: five equal training-time windows. Brightness is the mean per-cell visit count
+on a \emph{shared log colour scale} (colorbar at right, $\sim\!10^{-1}$ to $\sim\!10^{3}$ visits);
+the red dashed line is the noise wall ($z=8$), white rectangles are the reachable rooms. Uniform
+spreads broadly at moderate counts; MSE/\textsc{none} show bright concentrated dwell cells.}
 \label{fig:heat}
 \end{figure}
 
@@ -214,31 +287,32 @@ the red dashed line is the noise wall ($z=8$) and the white rectangles are the r
 The upstream maze experiment exists only as three Jupyter notebooks with an embedded A2C and no CLI.
 We extracted the A2C engine, the LPM prediction/uncertainty nets, and the pixel decoder
 \emph{verbatim} into an importable, CLI-driven package
-(\texttt{LPM\_exploration/Miniworld/experiments/}), added canonical ICM and RND on the shared CNN
-encoder, and added a per-step position log. The environment geometry is reused from our own
+(\texttt{LPM\_exploration/Miniworld/experiments/}), aligned its hyperparameters to the paper's
+Appendix~C.2, added canonical ICM and RND on the shared CNN encoder, a \texttt{--random-policy}
+uniform control, and a per-step position log. The environment geometry is reused from our own
 \texttt{miniworld\_play/envs.py} (a faithful port of the upstream maze). Each run writes a per-update
-CSV (\texttt{update, step, frames, fps, visited\_count, coverage\_frac, beyond\_wall\_frac,
-time\_at\_wall\_frac, int\_rew\_mean,} plus model/policy losses) and a compact \texttt{.npz} of
-$(\text{step}, x, z, \text{action}, \text{sticky})$. A grid runner launches all runs sequentially
-(resumable); an analysis script aggregates the CSVs and position logs into the coverage table, the
-coverage curves, the beyond-wall and time-at-wall figures, and the heatmap-evolution figures. All
-deviations are logged in \texttt{LPM\_exploration/UPSTREAM.md}.
+CSV (\texttt{coverage\_frac, beyond\_wall\_frac, time\_at\_wall\_frac,} plus model/policy losses) and
+a compact \texttt{.npz} of $(\text{step}, x, z, \text{action}, \text{sticky})$. A grid runner
+launches all runs in parallel (resumable); an analysis script aggregates the CSVs and position logs
+into the coverage table, the coverage curves, the TV-fixation figure, and the
+\emph{seed-averaged} heatmap-evolution figures. All deviations are logged in
+\texttt{LPM\_exploration/UPSTREAM.md}.
 
 \section{Limitations (stated up front)}
 \begin{enumerate}[leftmargin=1.6em]
-  \item \textbf{Short budget, small sample.} $2\times10^{4}$ steps $\times\,2$ seeds, single
-  environment, yields \emph{qualitative trends}, not rigorous statistical significance; several
-  metrics have between-seed std comparable to their mean. A faithful reproduction needs the upstream
-  $5\times10^{4}$ steps with many more seeds (and ideally vectorised environments on a cluster).
-  \item \textbf{Intrinsic signal does not yet dominate.} The no-intrinsic \textsc{none} baseline is
-  competitive on coverage, so at this budget exploration is largely driven by policy entropy rather
-  than the intrinsic reward---which is why the coverage ranking (unlike the action-fixation result)
-  does not separate the methods. This is a scale limitation, not evidence against the methods.
-  \item \textbf{Uniform reward normalisation is a design choice.} Running-std normalisation makes a
-  single $\lambda_i$ comparable across methods but deviates from the upstream per-method offsets;
-  within-method clean-vs-noisy comparisons are the most reliable read.
-  \item \textbf{ICM/RND are our ports.} They are canonical implementations on the shared encoder, not
-  upstream code; the LPM and MSE paths are the verbatim-extracted ones.
+  \item \textbf{Single-environment variance.} We run the paper's budget ($5\times10^{4}$ steps
+  $\times\,10$ seeds), but each run is still a \emph{single} environment, so coverage std stays at
+  $0.07$--$0.34$; the closer rankings among trained methods are illustrative, not significance-tested.
+  The uniform-beats-all and TV-fixation results, however, are large and robust. The 128-core box makes
+  20--30 seeds (or vectorised environments) cheap if tighter intervals are wanted.
+  \item \textbf{Coverage is the wrong yardstick here.} In a small, extrinsic-reward-free maze,
+  coverage rewards randomness, so it cannot demonstrate the value of directed exploration---which is
+  why uniform wins. A faithful test of LPM's exploration benefit needs a sparse-reward,
+  hard-exploration task (the paper's Atari / Montezuma settings), where no-intrinsic agents get zero
+  reward. What the maze \emph{can} show---and does---is noise robustness, decoupled from coverage.
+  \item \textbf{Figure-3 baselines are absent from the released maze code.} The maze notebooks contain
+  only LPM and pixel-curiosity; AMA/EDT/EME/Ensemble/IDF/RND are not present, so a full reproduction of
+  the paper's 7-method coverage ranking is not possible from this code. Our RND/ICM are our own ports.
   \item \textbf{Coverage is a 2D projection.} Occupancy is binned on the floor plane; agent heading
   and the first-person view (what actually drives the pixel predictors) are not visualised here.
 \end{enumerate}

@@ -67,8 +67,12 @@ class RunningNorm:
 
 class A2CAgent:
     def __init__(self, policy, num_actions, device="cpu", gamma=0.99, gae_lambda=0.95,
-                 lambda_intrinsic=0.1, entropy_coef=0.05, value_loss_coef=0.5,
-                 max_grad_norm=0.5, lr=0.01, normalize_intrinsic=True):
+                 lambda_intrinsic=1.0, entropy_coef=0.03, value_loss_coef=0.5,
+                 max_grad_norm=0.5, lr=0.01, normalize_intrinsic=False):
+        # Defaults match the paper's Appendix C.2 (MiniWorld): λ=1, entropy=0.03,
+        # raw intrinsic reward (no running-std normalization). Earlier defaults
+        # (λ=0.1, entropy=0.05, normalize=True) came from the upstream notebooks,
+        # which disagree with C.2 and gave a 10x-too-weak intrinsic signal.
         self.policy = policy
         self.num_actions = num_actions
         self.device = device
