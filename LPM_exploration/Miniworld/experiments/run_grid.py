@@ -72,12 +72,17 @@ def main():
         rid = f"{method}-{variant}-s{seed}"
         if is_complete(rid):
             print(f"[skip] {rid} (already complete)"); continue
-        cmd = [PY, os.path.join(EXP, "train_maze.py"), "--method", method,
+        # "uniform" = the no-learning random-walk control: train_maze has no such
+        # --method, so map it to `--method none --random-policy`.
+        train_method = "none" if method == "uniform" else method
+        cmd = [PY, os.path.join(EXP, "train_maze.py"), "--method", train_method,
                "--variant", variant, "--seed", str(seed), "--steps", str(args.steps),
                "--device", args.device, "--obs-scale", str(args.obs_scale),
                "--csv-log", os.path.join(RESULTS, rid + ".csv"),
                "--pos-log", os.path.join(POSITIONS, rid + ".npz"),
                "--log-interval", "5"]
+        if method == "uniform":
+            cmd.append("--random-policy")
         pending.append((rid, cmd))
 
     print(f"{len(runs)} runs total, {len(pending)} to run, "

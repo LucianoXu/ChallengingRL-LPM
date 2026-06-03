@@ -126,19 +126,42 @@ class _UncertaintyNet(nn.Module):
 
 
 class LPMModel(IntrinsicModel):
-    """Learning Progress Monitoring: reward = clip(eta*expected_err - actual, <=0.5)."""
+    """Learning Progress Monitoring (Hou et al. 2026).
+
+    reward_space="log" (default, paper-faithful, Eq 1-3 + Algorithm 1):
+        epsilon = log(MSE) of the dynamics model       [Eq 1]
+        g_phi (the error/uncertainty net) predicts that log-error  [Eq 2]
+        intrinsic reward  r = g_phi - epsilon           [Eq 3]
+    a difference of log-errors with NO eta and NO clip; r is gated to 0 until the
+    error queue is full (|D| = buffer_size, Alg 1 line 6), and g_phi is updated
+    together with the dynamics model every update (update_unc_every=1, Alg 1).
+
+    reward_space="raw" reproduces the form that actually shipped in the paper's
+    upstream notebooks: r = min(0.5, eta*exp(g_phi) - MSE), no gating, g_phi
+    updated every 5th dynamics update. Kept only to reproduce the pre-fix runs.
+    """
 
     def __init__(self, input_shape, num_actions, device="cpu", eta=1.0,
-                 buffer_size=100, update_unc_every=5):
+                 buffer_size=100, update_unc_every=None, reward_space="log"):
         self.device = device
         self.num_actions = num_actions
         self.eta = eta
+        self.reward_space = reward_space
         self.pred = _Decoder(input_shape, num_actions).to(device)
         self.pred_opt = optim.Adam(self.pred.parameters(), lr=1e-3)
         self.unc = _UncertaintyNet(input_shape, num_actions).to(device)
-        self.unc_opt = optim.Adam(self.unc.parameters(), lr=1e-2)
+        # Error-model lr: the notebook's 1e-2 overshoots g_phi into the [-10,10]
+        # clamp under the log-space objective (zero-gradient -> dead error model),
+        # so the faithful log reward uses 1e-3 (the only lr C.2 specifies). Raw
+        # mode keeps 1e-2 to reproduce the pre-fix runs exactly.
+        self.unc_opt = optim.Adam(self.unc.parameters(),
+                                  lr=1e-2 if reward_space == "raw" else 1e-3)
         self.buf = []  # (state, action, mse)
         self.buffer_size = buffer_size
+        # Alg 1 updates f_theta and g_phi together every cycle; the legacy raw
+        # notebook updated g_phi only every 5th dynamics update.
+        if update_unc_every is None:
+            update_unc_every = 5 if reward_space == "raw" else 1
         self.update_unc_every = update_unc_every
         self._since = 0
 
@@ -157,8 +180,16 @@ class LPMModel(IntrinsicModel):
         if len(self.buf) > self.buffer_size:
             self.buf.pop(0)
         with torch.no_grad():
-            expected = float(torch.exp(self.unc(s, a)).item())
-        return float(min(0.5, self.eta * expected - actual))
+            g = float(self.unc(s, a).item())   # g_phi predicts the log-MSE [Eq 2]
+        if self.reward_space == "raw":
+            # Legacy upstream-notebook form (raw-MSE space, eta, 0.5 clip).
+            return float(min(0.5, self.eta * np.exp(g) - actual))
+        # Paper-faithful log-space reward (Eq 1-3): r = g_phi - log(MSE), gated
+        # to 0 until the error queue is full (|D| = d, Alg 1 line 6).
+        if len(self.buf) < self.buffer_size:
+            return 0.0
+        eps = float(np.log(actual + 1e-6))     # epsilon = log(MSE) [Eq 1]
+        return float(g - eps)                  # r = g_phi - epsilon [Eq 3]
 
     def update(self, states, next_states, actions):
         pred = self.pred(states, actions)

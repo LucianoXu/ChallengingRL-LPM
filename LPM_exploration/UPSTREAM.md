@@ -195,3 +195,27 @@ ours vs. what is upstream.
   3. Cleanup: the older backup result dirs (`*_mac_20k/`, `*_notebook_50k/`) were **deleted** — only
      the C.2 results (`results/`, `positions/`, `figures/`, now incl. `uniform-*`) are kept. The
      `latex_notes` design note was rewritten as a single C.2-only document.
+
+- **2026-06-02 (LPM made paper-faithful + 64-seed rerun).** Acting on the code-vs-paper
+  audit, `Miniworld/experiments/models.py:LPMModel` was corrected from the notebook's raw-space
+  reward to the paper's Eq (1)-(3) + Algorithm 1 (default `reward_space="log"`):
+  1. **Log-space reward (Eq 1/3):** `r = g_phi(s,a) − log(MSE)` (a difference of log-errors),
+     replacing the notebook's `min(0.5, eta·exp(g_phi) − MSE)`. No eta, no 0.5 clip.
+  2. **|D|=d gating (Alg 1 L6):** reward is 0 until the error queue fills (buffer_size=100).
+  3. **g_phi updated every dynamics update** (`update_unc_every=1`, Alg 1 L9-11; was every 5th).
+  4. **Error-model lr 1e-3, not 1e-2.** Root cause found via an overfit probe: under the
+     log-space objective the notebook's 1e-2 drives g_phi into the [-10,10] clamp (zero gradient
+     → dead error model → reward pinned at ≈ −6); 1e-3 fits the log-error targets cleanly (probe
+     loss 39.8 → 0.001) and is the only lr C.2 specifies. After the fix, an end-to-end smoke shows
+     unc_loss 11.7 → ~0.1 and the intrinsic reward oscillating around 0 (learning-progress signal,
+     cf. paper Fig 2) instead of a constant −6.
+  The pre-fix raw form is preserved verbatim via `LPMModel(reward_space="raw")` (eta·exp − MSE,
+  0.5 clip, no gating, lr 1e-2, cadence 5). New tests in `tests/test_models.py`:
+  `test_lpm_reward_is_logspace_difference_eq3`, `test_lpm_raw_mode_reproduces_clipped_notebook_form`,
+  `test_lpm_error_model_lr_is_paper_consistent` (the old `<=0.5`-bound test was removed — the
+  log-space reward is unbounded above). `run_grid.py` gained a **`uniform`** pseudo-method
+  (→ `train_maze --method none --random-policy`) so all 6 methods launch from one grid. The earlier
+  C.2 50k×**10**-seed RAW-LPM results were moved to `results_rawlpm_10seed/` (+ positions/figures);
+  the corrected **64-seed × 6-method × 3-variant** grid (lpm/rnd/icm/mse/none/uniform, 50k steps)
+  was run fresh into `results/`,`positions/`. Only LPM's code changed — rnd/icm/mse/none/uniform
+  are byte-for-byte the prior methods. NB: pytest had to be added to the venv (`uv pip install pytest`).

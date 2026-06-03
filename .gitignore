@@ -50,3 +50,15 @@ LPM_exploration/Atari/experiments/figures/
 LPM_exploration/Miniworld/experiments/results/
 LPM_exploration/Miniworld/experiments/positions/
 LPM_exploration/Miniworld/experiments/figures/
+LPM_exploration/Miniworld/experiments/results_*/
+LPM_exploration/Miniworld/experiments/positions_*/
+LPM_exploration/Miniworld/experiments/figures_*/
+
+# LaTeX build artifacts (regenerable from the .tex)
+latex_notes/*.aux
+latex_notes/*.log
+latex_notes/*.out
+latex_notes/*.toc
+latex_notes/*.fls
+latex_notes/*.fdb_latexmk
+latex_notes/*.synctex.gz
