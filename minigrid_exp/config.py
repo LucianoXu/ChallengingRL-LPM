@@ -94,6 +94,11 @@ PPO_N_ENVS = 8
 # ImgObs (147-dim 7x7x3 view) instead of FlatObs (2835-dim, ~95% constant
 # mission-string padding). Same spatial representation, ~19x lighter.
 PPO_USE_FLAT_OBS = False
+# Vectorized-env backend: "subproc" runs the n_envs envs (+ their per-env
+# intrinsic wrappers) in parallel processes -> uses ~n_envs cores per run and
+# parallelizes the LPM/RND per-step compute; "dummy" runs them sequentially in
+# one process (~1 core). Use "subproc" + jobs≈cores/n_envs to saturate the box.
+PPO_VEC_ENV = "subproc"
 PPO_RESTRICT_ACTIONS = True
 PPO_EVAL_FREQ = 5_000
 PPO_EVAL_EPISODES = 10

@@ -2,7 +2,7 @@ import shutil
 
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from algorithms import get_algorithm_class
 from config import (
@@ -17,6 +17,7 @@ from config import (
     DQN_UCB_STATE_ROUND_DECIMALS,
     ENTROPY_COEF,
     PPO_EVAL_EPISODES,
+    PPO_VEC_ENV,
     PPO_EVAL_FREQ,
     PPO_HYPERPARAMS,
     PPO_N_ENVS,
@@ -85,7 +86,14 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
 
         env_fns.append(_make_env)
 
-    env = DummyVecEnv(env_fns)
+    # SubprocVecEnv runs the n_envs envs (+ per-env intrinsic wrappers) in
+    # parallel processes (uses ~n_envs cores, parallelizes the per-step compute);
+    # DummyVecEnv runs them sequentially in one process. SB3 picks a safe default
+    # start method (forkserver/spawn) when unspecified.
+    if PPO_VEC_ENV == "subproc" and n_envs > 1:
+        env = SubprocVecEnv(env_fns)
+    else:
+        env = DummyVecEnv(env_fns)
     if log_dir is not None:
         return VecMonitor(env, filename=str(log_dir / run_name),
                           info_keywords=("ep_extrinsic", "ep_intrinsic"))
