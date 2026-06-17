@@ -6,7 +6,7 @@ EXPR_DATA = REPO_ROOT / "expr_data" / "minigrid"
 
 RESULTS_DIR = EXPR_DATA / "results"
 
-ALGORITHM_NAME = "dqn"
+ALGORITHM_NAME = "ppo"
 ALGORITHM_LABELS = {
     "dqn": "DQN",
     "ppo": "PPO",

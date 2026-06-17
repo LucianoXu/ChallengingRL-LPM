@@ -8,6 +8,10 @@ additions: a paper-faithful LPM wrapper (`wrappers/lpm_wrapper.py`), explicit
 analysis writing to `expr_data/minigrid/`. See `docs/minigrid_setup_analysis.md`
 and `docs/SPEC.md`.
 
+**Active learning method: PPO** (`config.ALGORITHM_NAME = "ppo"`). The project uses
+PPO everywhere — on-policy, so no DQN replay-buffer / random-sampling memory pressure.
+The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
+
 ## Analysis scripts
 
 Use `analyze.py` for all post-run analysis — it understands the run-name format
