@@ -28,13 +28,19 @@ def test_info_has_extrinsic_intrinsic_split():
 
 
 def test_reward_gated_to_zero_before_buffer_fills():
-    # buffer_size=10: the first <10 steps must yield exactly 0 intrinsic reward.
+    # buffer_size=5: the first 4 steps must be exactly 0.0 (no early activation),
+    # and at least one step from step 5 onward must be non-zero (activation occurs).
+    buffer_size = 5
     base = make_env("MiniGrid-Empty-8x8-v0", intrinsic=False, noise=False,
                     seed=0, training=True)
-    env = LPMIntrinsicRewardWrapper(base, buffer_size=10, reward_scale=1.0, seed=0)
-    rows = _rollout(env, 8)
-    assert all(r["lpm_intrinsic_reward"] == 0.0 for r in rows), \
-        [r["lpm_intrinsic_reward"] for r in rows]
+    env = LPMIntrinsicRewardWrapper(base, buffer_size=buffer_size, reward_scale=1.0, seed=0)
+    rows = _rollout(env, 12)
+    pre = [r["lpm_intrinsic_reward"] for r in rows[:buffer_size - 1]]
+    post = [r["lpm_intrinsic_reward"] for r in rows[buffer_size - 1:]]
+    assert all(x == 0.0 for x in pre), \
+        f"Expected zeros before activation, got: {pre}"
+    assert any(x != 0.0 for x in post), \
+        f"Expected non-zero after activation, got: {post}"
 
 
 def test_reward_nonzero_after_buffer_fills():

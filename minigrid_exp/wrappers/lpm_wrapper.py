@@ -142,10 +142,8 @@ class LPMIntrinsicRewardWrapper(gym.Wrapper):
 
         # Reward: gated to 0 until |D| = buffer_size (Alg 1 L6), then r = g - log(MSE).
         if len(self.buf) < self.buffer_size:
-            raw = 0.0
-        else:
-            raw = float(g - float(np.log(mse + 1e-6)))
-
+            return 0.0, 0.0
+        raw = float(g - float(np.log(mse + 1e-6)))
         if self.normalize_rewards:
             self.reward_rms.update(np.asarray([raw], dtype=np.float64))
             bonus = raw / np.sqrt(self.reward_rms.var + 1e-8)
