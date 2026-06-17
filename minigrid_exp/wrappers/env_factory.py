@@ -153,6 +153,12 @@ def make_env(
         env = ImgObsWrapper(env)
         env = FlattenObservation(env)
 
+    # NOTE: the intrinsic wrapper is applied here, BEFORE MiniGridActionSubsetWrapper
+    # (added further below). So the intrinsic wrappers see the FULL MiniGrid action
+    # space (Discrete(7)) at construction, and receive the *mapped base* action in
+    # step(). The LPM wrapper therefore one-hots the base-action space (num_actions=7),
+    # not the policy's reduced subset — intentional and in-range; do not assume
+    # num_actions matches the agent's action_space.n.
     if training and intrinsic:
         if method == "rnd":
             env = RNDIntrinsicRewardWrapper(

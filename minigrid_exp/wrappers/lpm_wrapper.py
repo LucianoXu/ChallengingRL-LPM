@@ -30,8 +30,12 @@ class LPMIntrinsicRewardWrapper(gym.Wrapper):
     Error model g_phi predicts that log-error (Eq 2). Intrinsic reward
     r = g_phi - epsilon (Eq 3), gated to 0 until the error buffer is full
     (|D| = buffer_size, Alg 1 line 6). The reward is running-std normalized and
-    scaled by reward_scale, mirroring RNDIntrinsicRewardWrapper so beta is
-    comparable across methods. Faithful to
+    scaled by reward_scale — the same reward-scale knob used in
+    RNDIntrinsicRewardWrapper (applied post running-std normalization). However,
+    the per-step effect differs: RND's raw bonus is a non-negative squared error
+    (positive mean), while LPM's raw reward g_phi - log(MSE) is approximately
+    mean-zero and signed. Beta should therefore be swept per method, never shared
+    across methods. Faithful to
     LPM_exploration/Miniworld/experiments/models.py:LPMModel(reward_space="log").
     """
 

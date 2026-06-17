@@ -8,6 +8,13 @@ additions: a paper-faithful LPM wrapper (`wrappers/lpm_wrapper.py`), explicit
 analysis writing to `expr_data/minigrid/`. See `docs/minigrid_setup_analysis.md`
 and `docs/SPEC.md`.
 
+## Analysis scripts
+
+Use `analyze.py` for all post-run analysis — it understands the run-name format
+`<env>__<variant>__<method>__seed_<n>[__beta<b>]`. The vendored `evaluate.py` and
+`plot_results.py` are stale: their filename parsers predate the `__<method>__`
+segment and will silently misparse or skip results; do not rely on them.
+
 ## Verified versions (smoke-tested 2026-06-17)
 
 - `stable-baselines3==2.9.0` (gymnasium-1.x compatible)
