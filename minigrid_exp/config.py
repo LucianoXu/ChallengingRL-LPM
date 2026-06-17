@@ -24,19 +24,11 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
+# One (more interesting) environment per difficulty tier.
 ENVIRONMENTS = {
-    "easy": [
-        "MiniGrid-Empty-8x8-v0",
-        "MiniGrid-DoorKey-5x5-v0",
-    ],
-    "medium": [
-        "MiniGrid-FourRooms-v0",
-        "MiniGrid-DoorKey-8x8-v0",
-    ],
-    "hard": [
-        "MiniGrid-MultiRoom-N6-v0",
-        "MiniGrid-KeyCorridorS3R3-v0",
-    ],
+    "easy": ["MiniGrid-DoorKey-5x5-v0"],
+    "medium": ["MiniGrid-FourRooms-v0"],
+    "hard": ["MiniGrid-KeyCorridorS3R3-v0"],
 }
 
 SEEDS = [1, 2, 3]
@@ -71,7 +63,11 @@ LPM_REWARD_SCALE = 0.05
 LPM_LEARNING_RATE = 1e-3
 LPM_HIDDEN_DIM = 128
 LPM_BUFFER_SIZE = 100
-DQN_DOORKEY_SUBGOAL_REWARDS = True
+# Count-based (UCB-style) exploration bonus = COUNT_REWARD_SCALE / sqrt(N(obs)).
+COUNT_REWARD_SCALE = 0.05
+# Disabled: keep DoorKey purely sparse (no key/door shaping) for a clean
+# "does intrinsic motivation help on sparse reward" comparison.
+DQN_DOORKEY_SUBGOAL_REWARDS = False
 DQN_KEY_PICKUP_BONUS = 0.20
 DQN_DOOR_OPEN_BONUS = 0.40
 DQN_POLICY_KWARGS = {}
@@ -92,7 +88,9 @@ DQN_HYPERPARAMS = {
 
 PPO_POLICY = "MlpPolicy"
 PPO_N_ENVS = 8
-PPO_USE_FLAT_OBS = True
+# ImgObs (147-dim 7x7x3 view) instead of FlatObs (2835-dim, ~95% constant
+# mission-string padding). Same spatial representation, ~19x lighter.
+PPO_USE_FLAT_OBS = False
 PPO_RESTRICT_ACTIONS = True
 PPO_EVAL_FREQ = 5_000
 PPO_EVAL_EPISODES = 10
