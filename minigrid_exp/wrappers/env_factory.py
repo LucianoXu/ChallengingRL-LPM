@@ -14,6 +14,10 @@ from config import (
     DQN_RESTRICT_ACTIONS,
     DQN_USE_FLAT_OBS,
     INTRINSIC_REWARD_METHOD,
+    LPM_BUFFER_SIZE,
+    LPM_HIDDEN_DIM,
+    LPM_LEARNING_RATE,
+    LPM_REWARD_SCALE,
     PPO_RESTRICT_ACTIONS,
     PPO_USE_FLAT_OBS,
     RND_DEVICE,
@@ -27,6 +31,7 @@ from config import (
 )
 from wrappers.noise_wrapper import ObservationNoiseWrapper
 from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
+from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
 
 
 MINIGRID_ACTION_NAMES = {
@@ -117,6 +122,8 @@ def make_env(
     seed: int = 0,
     noise_prob: float = 0.10,
     training: bool = False,
+    method: str = "rnd",
+    beta: float | None = None,
 ):
     """
     Create MiniGrid environment with optional intrinsic reward and optional noise.
@@ -148,23 +155,34 @@ def make_env(
         env = FlattenObservation(env)
 
     if training and intrinsic:
-        if INTRINSIC_REWARD_METHOD != "rnd":
-            raise ValueError(
-                f"Unsupported intrinsic reward method: {INTRINSIC_REWARD_METHOD}"
+        if method == "rnd":
+            env = RNDIntrinsicRewardWrapper(
+                env,
+                reward_scale=RND_REWARD_SCALE if beta is None else beta,
+                learning_rate=RND_LEARNING_RATE,
+                hidden_dim=RND_HIDDEN_DIM,
+                output_dim=RND_OUTPUT_DIM,
+                normalize_observations=RND_NORMALIZE_OBSERVATIONS,
+                normalize_rewards=RND_NORMALIZE_REWARDS,
+                observation_clip=RND_OBSERVATION_CLIP,
+                device=RND_DEVICE,
+                seed=seed,
             )
-
-        env = RNDIntrinsicRewardWrapper(
-            env,
-            reward_scale=RND_REWARD_SCALE,
-            learning_rate=RND_LEARNING_RATE,
-            hidden_dim=RND_HIDDEN_DIM,
-            output_dim=RND_OUTPUT_DIM,
-            normalize_observations=RND_NORMALIZE_OBSERVATIONS,
-            normalize_rewards=RND_NORMALIZE_REWARDS,
-            observation_clip=RND_OBSERVATION_CLIP,
-            device=RND_DEVICE,
-            seed=seed,
-        )
+        elif method == "lpm":
+            env = LPMIntrinsicRewardWrapper(
+                env,
+                reward_scale=LPM_REWARD_SCALE if beta is None else beta,
+                learning_rate=LPM_LEARNING_RATE,
+                hidden_dim=LPM_HIDDEN_DIM,
+                buffer_size=LPM_BUFFER_SIZE,
+                normalize_observations=RND_NORMALIZE_OBSERVATIONS,
+                normalize_rewards=RND_NORMALIZE_REWARDS,
+                observation_clip=RND_OBSERVATION_CLIP,
+                device=RND_DEVICE,
+                seed=seed,
+            )
+        else:
+            raise ValueError(f"Unsupported intrinsic reward method: {method}")
 
     action_map = get_action_map(env_id)
     if action_map is not None:
