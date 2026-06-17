@@ -1,5 +1,9 @@
 # Progress Meeting
 
+## Time: June 17
+
+We decided that Yingte will design and run the experiments, keep all the data, and Youssef analyses and prepares the report.
+
 ## Time: June 2
 
 Yingte: I tried to reproduce the MiniWorld experiments.
