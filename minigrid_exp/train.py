@@ -86,9 +86,10 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
 
     env = DummyVecEnv(env_fns)
     if log_dir is not None:
-        return VecMonitor(env, filename=str(log_dir / run_name))
+        return VecMonitor(env, filename=str(log_dir / run_name),
+                          info_keywords=("ep_extrinsic", "ep_intrinsic"))
 
-    return VecMonitor(env)
+    return VecMonitor(env, info_keywords=("ep_extrinsic", "ep_intrinsic"))
 
 
 def train_agent(
@@ -121,7 +122,8 @@ def train_agent(
             method=method,
             beta=beta,
         )
-        env = Monitor(env, filename=str(log_dir / run_name))
+        env = Monitor(env, filename=str(log_dir / run_name),
+                      info_keywords=("ep_extrinsic", "ep_intrinsic"))
     else:
         env = make_vector_env(
             env_id=env_id,

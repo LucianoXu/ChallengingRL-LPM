@@ -31,6 +31,7 @@ from config import (
 from wrappers.noise_wrapper import ObservationNoiseWrapper
 from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
 from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
+from wrappers.reward_split_wrapper import EpisodeRewardSplitWrapper
 
 
 MINIGRID_ACTION_NAMES = {
@@ -193,4 +194,5 @@ def make_env(
     if action_map is not None:
         env = MiniGridActionSubsetWrapper(env, action_map)
 
+    env = EpisodeRewardSplitWrapper(env)   # outermost: emits ep_extrinsic / ep_intrinsic
     return env
