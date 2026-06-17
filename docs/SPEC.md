@@ -44,12 +44,13 @@ Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
 ## Work to do
 
 2. According to the results by Yousself (see the repo and [Report2](<reports/report3/Progress meeting.pdf>)), pick the environment with appropriate difficulty. Also understand the design of the noisy observation there.
-3. Conduct parameter sweep for beta (intrinsic reward coefficient) on RND exploration method, and evaluate the extrinsic and intrinsic reward separately, and conclude for the best strategy of choosing the beta.
+3. Conduct a parameter sweep for beta (intrinsic reward coefficient) on RND, tracking the extrinsic and intrinsic reward separately. Keep this lightweight — it is **not the main line**: the goal is only to find a coefficient in a roughly-right range that works, not an exhaustive best-beta study. Report the qualitative regime (too small → intrinsic ignored, too large → intrinsic drowns extrinsic).
 4. Apply different exploration methods on different environments (clean and noisy). Ideally we will see that when difficulty goes higher, intrinsic reward methods will finally outperform.
 5. We wan to verify whether LPM is robust under noise in noisy-MiniGrid environment. Compare LPM and RND on one MiniGrid environment with different ratio of observation noise.
 
 
 ## Requirements
 - Keep all raw data organized in expr_data. Maintain observability with markdown explanations so that they can be used for further analysis.
-- Use 3 seeds for each experiment, and aggregate into mean and variance.
-- Utilize parallel computing to accelerate the experiment.
+- Use 8 seeds for each experiment, and aggregate into mean and variance.
+- Diversify the MiniGrid metrics (coverage alone was shown to be a poor exploration metric in the maze). Report at least: final success rate, and **sample efficiency via a training-step vs. reward curve** (so a faster learner shows up as an earlier-rising curve even when final performance converges). Trace demonstrations as a qualitative complement.
+- Utilize parallel computing to accelerate the experiment (the 128-core box runs seed/sweep grids via `run_grid.py --jobs`; MiniGrid is cheap so 8 seeds is trivial).
