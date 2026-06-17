@@ -1,0 +1,55 @@
+# Specification for Exploration vs. Exploitation Project
+
+Members: Yingte, Youssef.
+
+Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
+
+
+## Research Question to Answer
+
+- What does the experiments in the LPM paper tell us about metrics for explorations?
+- What is the corret way to mix extrinsic and intrinsic reward? What will happen if the coefficient is too small or too large?
+- Does intrinsic-reward method out-perform baseline methods on RL environments with sparse reward, like minigrid?
+- Does LPM method generalize to other methods with noise besides the MiniWorld environment with noisy-TV?
+
+
+## Presentation Slides Structures
+
+1. Introduction
+
+    1. General introduction to Exploration vs. Exploitation
+    2. Intrinsic Reward Methods
+    3. Noisy-TV problem and LPM paper
+
+2. Reproducting LPM paper (check report 2)
+
+    1. Miniworld environment, explanation, demonstration
+    2. Setup and metrics
+    3. TV-action share
+    5. Coverage curve for different methods. Our experiments indicates larger variance and LPM is not the best.
+    4. Coverage heatmap
+    5. Conclusions and questions. 
+        Coverage is not a good metric for exploration ability. Then what is a good metric for exploration?
+
+3. Intrinsic Reward and LPM
+
+    1. Introduce environment and setup
+    2. Sweep results of different beta (intrinsic reward coefficient)
+    3. Success rate of different exploration methods on different environments (clean and noisy)
+    4. Demonstration of traces
+    5. Comparison of LPM and RND on clean and noisy performance gap.
+
+4. Conclusion
+
+## Work to do
+
+2. According to the results by Yousself (see the repo and [Report2](<reports/report3/Progress meeting.pdf>)), pick the environment with appropriate difficulty. Also understand the design of the noisy observation there.
+3. Conduct parameter sweep for beta (intrinsic reward coefficient) on RND exploration method, and evaluate the extrinsic and intrinsic reward separately, and conclude for the best strategy of choosing the beta.
+4. Apply different exploration methods on different environments (clean and noisy). Ideally we will see that when difficulty goes higher, intrinsic reward methods will finally outperform.
+5. We wan to verify whether LPM is robust under noise in noisy-MiniGrid environment. Compare LPM and RND on one MiniGrid environment with different ratio of observation noise.
+
+
+## Requirements
+- Keep all raw data organized in expr_data. Maintain observability with markdown explanations so that they can be used for further analysis.
+- Use 3 seeds for each experiment, and aggregate into mean and variance.
+- Utilize parallel computing to accelerate the experiment.

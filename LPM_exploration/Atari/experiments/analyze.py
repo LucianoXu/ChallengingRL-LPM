@@ -8,7 +8,9 @@ import numpy as np, pandas as pd
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RES = os.path.join(HERE, "results"); OUT = os.path.join(HERE, "figures"); os.makedirs(OUT, exist_ok=True)
+# Artifacts live under <repo>/expr_data/atari/ (gitignored). HERE -> Atari -> LPM_exploration -> repo root.
+EXPR_DATA = os.path.abspath(os.path.join(HERE, "..", "..", "..", "expr_data", "atari"))
+RES = os.path.join(EXPR_DATA, "results"); OUT = os.path.join(EXPR_DATA, "figures"); os.makedirs(OUT, exist_ok=True)
 
 def final_score(df, frac=0.1):
     k = max(1, int(len(df) * frac)); return df["ep_score_mean"].iloc[-k:].mean()

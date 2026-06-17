@@ -22,7 +22,15 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
+# === All experiment data (results, positions, figures, datasets) ===
+# Canonical home for every experiment artifact, relocated out of the package
+# tree. The run_grid.py / analyze.py scripts read & write here by default.
+# See LPM_exploration/UPSTREAM.md ("Local additions / deviations").
+/expr_data/
+
 # Local / generated experiment artifacts
+# (kept as defensive backstops in case anything is run from an old checkout /
+#  different CWD; the live artifacts now live under /expr_data/ above.)
 LPM_exploration/Noisy_MNIST/data/
 LPM_exploration/Miniworld/data/
 LPM_exploration/Noisy_MNIST/exploration_methods_*.pdf

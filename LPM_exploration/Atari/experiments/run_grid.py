@@ -7,6 +7,8 @@ import argparse, itertools, os, subprocess, sys
 
 ATARI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = os.path.join(os.path.dirname(ATARI), ".venv", "bin", "python")  # LPM_exploration/.venv
+# Experiment artifacts live under <repo>/expr_data/ (gitignored). ATARI -> LPM_exploration -> repo root.
+EXPR_DATA = os.path.join(os.path.dirname(os.path.dirname(ATARI)), "expr_data", "atari")
 
 # method label -> (algo, extra args)
 METHODS = {
@@ -49,7 +51,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--which", choices=["rq1", "rq2", "all"], default="all")
     ap.add_argument("--num-env-steps", type=int, default=1_000_000)
-    ap.add_argument("--results-dir", default=os.path.join(ATARI, "experiments", "results"))
+    ap.add_argument("--results-dir", default=os.path.join(EXPR_DATA, "results"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", default=None)
     a = ap.parse_args()

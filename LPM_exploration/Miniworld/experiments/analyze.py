@@ -1,6 +1,6 @@
 """Aggregate maze runs into a coverage table + curves + heatmap-evolution figures.
 
-Usage: python analyze.py  (uses ./results, ./positions -> ./figures)
+Usage: python analyze.py  (defaults to <repo>/expr_data/miniworld/{results,positions} -> figures)
 """
 from __future__ import annotations
 
@@ -18,6 +18,11 @@ import matplotlib.pyplot as plt  # noqa: E402
 import heatmaps  # noqa: E402
 
 RID = re.compile(r"(?P<method>\w+)-(?P<variant>nonoise|noisy_tv|action_noise)-s(?P<seed>\d+)")
+
+# Default artifact location: <repo>/expr_data/miniworld/ (gitignored).
+# __file__ -> experiments -> Miniworld -> LPM_exploration -> repo root.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+EXPR_DATA = os.path.abspath(os.path.join(_HERE, "..", "..", "..", "expr_data", "miniworld"))
 
 
 def _final(df, col, frac=0.1):
@@ -138,9 +143,9 @@ def run(results_dir, positions_dir, figures_dir, n_windows=5):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results", default="results")
-    ap.add_argument("--positions", default="positions")
-    ap.add_argument("--figures", default="figures")
+    ap.add_argument("--results", default=os.path.join(EXPR_DATA, "results"))
+    ap.add_argument("--positions", default=os.path.join(EXPR_DATA, "positions"))
+    ap.add_argument("--figures", default=os.path.join(EXPR_DATA, "figures"))
     ap.add_argument("--n-windows", type=int, default=5)
     a = ap.parse_args()
     run(a.results, a.positions, a.figures, a.n_windows)

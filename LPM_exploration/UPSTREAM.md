@@ -219,3 +219,22 @@ ours vs. what is upstream.
   the corrected **64-seed × 6-method × 3-variant** grid (lpm/rnd/icm/mse/none/uniform, 50k steps)
   was run fresh into `results/`,`positions/`. Only LPM's code changed — rnd/icm/mse/none/uniform
   are byte-for-byte the prior methods. NB: pytest had to be added to the venv (`uv pip install pytest`).
+
+- **2026-06-17 — relocated all experiment artifacts + datasets to `/expr_data/` (repo
+  root, gitignored).** To keep the package tree clean and centralise every bulky local
+  artifact, the experiment data was physically moved (renames, contents unchanged) out
+  of `LPM_exploration/` into a single top-level `expr_data/`:
+  - `Miniworld/experiments/{results,positions,figures}/` → `expr_data/miniworld/{results,positions,figures}/`
+    (current 64-seed × 6-method × 3-variant grid).
+  - `Miniworld/experiments/{results,positions,figures}_rawlpm_10seed/` →
+    `expr_data/miniworld/rawlpm_10seed/{results,positions,figures}/` (the older 10-seed RAW-LPM snapshot).
+  - `Miniworld/data/` (the 341 MB CIFAR-10 download) → `expr_data/datasets/cifar-10/`.
+  Code repointed to the new home (these are *our* harness scripts, not upstream):
+  `Miniworld/experiments/run_grid.py` (RESULTS/POSITIONS now under `<repo>/expr_data/miniworld`),
+  `Miniworld/experiments/analyze.py` (default `--results/--positions/--figures`),
+  `Atari/experiments/run_grid.py` (`--results-dir` default) and `Atari/experiments/analyze.py`
+  (RES/OUT) now default to `<repo>/expr_data/atari/{results,figures}` (no Atari data exists yet —
+  repointed for consistency). The upstream CIFAR loader `Atari/exploration/cifar.py` is left
+  untouched: it still uses `root='./data'` (CWD-relative), so a fresh Atari noisy-TV run would
+  re-download rather than read `expr_data/datasets/cifar-10/`. `.gitignore` gained `/expr_data/`
+  (the old per-dir artifact rules were kept as defensive backstops).

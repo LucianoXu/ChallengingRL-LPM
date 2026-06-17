@@ -22,8 +22,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 EXP = os.path.dirname(os.path.abspath(__file__))
 PY = os.path.join(os.path.dirname(os.path.dirname(EXP)), ".venv", "bin", "python")
-RESULTS = os.path.join(EXP, "results")
-POSITIONS = os.path.join(EXP, "positions")
+# Experiment artifacts live under <repo>/expr_data/ (gitignored), not in the
+# package tree. EXP -> Miniworld -> LPM_exploration -> repo root.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(EXP)))
+EXPR_DATA = os.path.join(REPO_ROOT, "expr_data", "miniworld")
+RESULTS = os.path.join(EXPR_DATA, "results")
+POSITIONS = os.path.join(EXPR_DATA, "positions")
 
 METHODS = ["lpm", "rnd", "icm", "mse", "none"]
 VARIANTS = ["nonoise", "noisy_tv", "action_noise"]
