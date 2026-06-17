@@ -85,8 +85,12 @@ def main():
             rid = f"{env_id}__{variant}__{method}__s{seed}" + (f"__{tag}" if tag else "")
             pending.append((rid.replace("/", "_"), cmd))
 
+    # Default to 1 thread/job: proven clean (the 72-run OMP=1 grid had 0 failures),
+    # and cranking OMP threads neither sped runs up (375 vs 414 fps) nor saturated
+    # the box productively — it correlated with SIGKILLs of the heavier runs.
+    # Opt in to more via --threads-per-job only after validating memory safety.
     cores = os.cpu_count() or 8
-    threads = a.threads_per_job or max(1, cores // max(1, a.jobs))
+    threads = a.threads_per_job or 1
     print(f"{len(pending)} cells to run, jobs={a.jobs}, threads/job={threads} (cores={cores})")
     if a.dry_run:
         for rid, _ in pending:
