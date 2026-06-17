@@ -51,6 +51,20 @@ Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
 
 ## Requirements
 - Keep all raw data organized in expr_data. Maintain observability with markdown explanations so that they can be used for further analysis.
-- Use 3 seeds for each experiment, and aggregate into mean and variance. (Reduced from 8 to cut compute: the SB3-DQN MiniGrid runs are memory-bandwidth-bound, so wall-clock is dominated by total work, not core count — fewer seeds is the effective lever. Revisit upward for the headline LPM-vs-RND comparison if the 3-seed bands are too noisy to separate methods.)
+- Use 3 seeds for each experiment, and aggregate into mean and variance. (Reduced from 8 to keep compute manageable; revisit upward for the headline LPM-vs-RND comparison if the 3-seed bands are too noisy to separate methods.)
 - Diversify the MiniGrid metrics (coverage alone was shown to be a poor exploration metric in the maze). Report at least: final success rate, and **sample efficiency via a training-step vs. reward curve** (so a faster learner shows up as an earlier-rising curve even when final performance converges). Trace demonstrations as a qualitative complement. Track **extrinsic and intrinsic reward separately** (per-episode sums persisted to the monitor CSV) for the β analysis.
-- Utilize parallel computing to accelerate the experiment via `run_grid.py --jobs`. NOTE: the workload is memory-bandwidth-bound — at 96 parallel jobs each run is ~3× slower than solo while ~22% of the 128 cores sit idle, so use ~`--jobs 48-64` (similar wall-clock, frees cores) rather than saturating all cores.
+- Utilize parallel computing via `run_grid.py --jobs`. Under PPO each run is one process (`DummyVecEnv`, 8 envs, ~1 core); it is compute-bound (no DQN replay-buffer random-sampling), so parallelise across runs (`--jobs ≈ number of cells`, up to the core count). (The DQN path was memory-bandwidth-bound — that is no longer the binding constraint under PPO.)
+
+## Locked experiment configuration (2026-06-17)
+
+- **Learning method: PPO** everywhere (SB3 `MlpPolicy`, 8 vec-envs). DQN/UCB-DQN retired (dormant).
+- **Observation: ImgObs** (147-dim 7×7×3 egocentric view), not FlatObs (whose 2835 dims were ~95% constant mission-string padding; same spatial representation, ~19× lighter).
+- **Environments — one (more interesting) per tier:**
+  - easy: `MiniGrid-DoorKey-5x5` (subgoal shaping DISABLED → purely sparse)
+  - medium: `MiniGrid-FourRooms`
+  - hard: `MiniGrid-KeyCorridorS3R3`
+- **Exploration methods compared:** `none` (PPO baseline), `count` (UCB-style count-based bonus = β/sqrt(N(obs)), the non-intrinsic classical comparator), `rnd`, `lpm`.
+- **Variants (2×2):** clean/noisy × baseline/intrinsic; noise = 10% per-element observation corruption (global, not localized noisy-TV).
+- **Budget:** 1M PPO steps/run (revisit for KeyCorridor if undertrained).
+- **Grid:** 3 envs × [2 baseline(`none`) + 2 intrinsic-variants × {count,rnd,lpm}] × 3 seeds = **72 runs**.
+- **β:** RND/LPM/count all use `reward_scale=0.05` for now; per-method β sweep is a later step.
