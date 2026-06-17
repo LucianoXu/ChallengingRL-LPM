@@ -30,11 +30,15 @@ def cell_complete(env_id, variant, method, seed, tag):
     return os.path.exists(os.path.join(config.MODELS_DIR, f"{run_name}.zip"))
 
 
-def run_cell(cmd, logfile):
+def run_cell(cmd, logfile, threads):
+    # Pin each run's CPU-thread count so jobs*threads saturates the box without
+    # oversubscribing. torch/numpy read these at import.
+    tvars = {k: str(threads) for k in
+             ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+              "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")}
     with open(logfile, "w") as fh:
         return subprocess.run(cmd, cwd=EXP, stdout=fh, stderr=subprocess.STDOUT,
-                              env={**os.environ, "PYTHONPATH": EXP,
-                                   "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}).returncode
+                              env={**os.environ, "PYTHONPATH": EXP, **tvars}).returncode
 
 
 def main():
@@ -45,6 +49,8 @@ def main():
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--threads-per-job", type=int, default=0,
+                    help="CPU threads per run (OMP/MKL/...); 0 = auto (cores // jobs, min 1) to saturate the box")
     ap.add_argument("--envs", nargs="+", default=None,
                     help="restrict to these env ids; default = all config envs")
     ap.add_argument("--variants", nargs="+", default=None,
@@ -79,7 +85,9 @@ def main():
             rid = f"{env_id}__{variant}__{method}__s{seed}" + (f"__{tag}" if tag else "")
             pending.append((rid.replace("/", "_"), cmd))
 
-    print(f"{len(pending)} cells to run, jobs={a.jobs}")
+    cores = os.cpu_count() or 8
+    threads = a.threads_per_job or max(1, cores // max(1, a.jobs))
+    print(f"{len(pending)} cells to run, jobs={a.jobs}, threads/job={threads} (cores={cores})")
     if a.dry_run:
         for rid, _ in pending:
             print("[run]", rid)
@@ -87,7 +95,7 @@ def main():
 
     done = failed = 0
     with ProcessPoolExecutor(max_workers=a.jobs) as ex:
-        futs = {ex.submit(run_cell, cmd, f"/tmp/minigrid_logs/{rid}.out"): rid
+        futs = {ex.submit(run_cell, cmd, f"/tmp/minigrid_logs/{rid}.out", threads): rid
                 for rid, cmd in pending}
         for fut in as_completed(futs):
             rid = futs[fut]
