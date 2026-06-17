@@ -13,7 +13,11 @@ import argparse
 import itertools
 import os
 import subprocess
-from concurrent.futures import ProcessPoolExecutor, as_completed
+# ThreadPoolExecutor (not ProcessPoolExecutor): run_cell only blocks on
+# subprocess.run, so threads give identical parallelism (the real work is in the
+# child processes) without multiprocessing's fork/resource-tracker fragility,
+# which fails to start workers in detached/background (non-TTY) contexts.
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import config
 
@@ -98,7 +102,7 @@ def main():
         return
 
     done = failed = 0
-    with ProcessPoolExecutor(max_workers=a.jobs) as ex:
+    with ThreadPoolExecutor(max_workers=a.jobs) as ex:
         futs = {ex.submit(run_cell, cmd, f"/tmp/minigrid_logs/{rid}.out", threads): rid
                 for rid, cmd in pending}
         for fut in as_completed(futs):
