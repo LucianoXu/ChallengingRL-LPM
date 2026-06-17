@@ -45,11 +45,13 @@ def main():
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--envs", nargs="+", default=None,
+                    help="restrict to these env ids; default = all config envs")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     os.makedirs("/tmp/minigrid_logs", exist_ok=True)
-    envs = [e for tier in config.ENVIRONMENTS.values() for e in tier]
+    envs = a.envs if a.envs else [e for tier in config.ENVIRONMENTS.values() for e in tier]
 
     pending = []
     for env_id, (variant, intrinsic, noise), seed in itertools.product(envs, VARIANTS, a.seeds):
@@ -77,13 +79,25 @@ def main():
             print("[run]", rid)
         return
 
+    done = failed = 0
     with ProcessPoolExecutor(max_workers=a.jobs) as ex:
         futs = {ex.submit(run_cell, cmd, f"/tmp/minigrid_logs/{rid}.out"): rid
                 for rid, cmd in pending}
         for fut in as_completed(futs):
             rid = futs[fut]
-            rc = fut.result()
-            print(f"[{'done' if rc == 0 else 'FAIL'}] {rid}")
+            try:
+                rc = fut.result()
+            except Exception as exc:  # don't let one cell abort the whole grid
+                rc, exc_note = 1, f" — exception: {exc}"
+            else:
+                exc_note = ""
+            if rc == 0:
+                done += 1
+            else:
+                failed += 1
+            print(f"[{'done' if rc == 0 else 'FAIL'}] {rid}{exc_note}", flush=True)
+    print(f"=== grid finished: {done} done, {failed} failed, "
+          f"{len(pending)} attempted ===", flush=True)
 
 
 if __name__ == "__main__":

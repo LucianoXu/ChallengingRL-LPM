@@ -39,7 +39,7 @@ ENVIRONMENTS = {
     ],
 }
 
-SEEDS = [1, 2, 3, 4, 5, 6, 7, 8]
+SEEDS = [1, 2, 3]
 
 TOTAL_TIMESTEPS = 5_000_000
 PARALLEL_WORKERS = 2
