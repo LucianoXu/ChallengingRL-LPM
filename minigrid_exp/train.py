@@ -64,7 +64,8 @@ def get_algorithm_config():
     raise ValueError(f"Unsupported algorithm: {ALGORITHM_NAME}")
 
 
-def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, run_name):
+def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, run_name,
+                    method="rnd", beta=None):
     env_fns = []
 
     for env_index in range(n_envs):
@@ -77,6 +78,8 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
                 noise=noise,
                 seed=env_seed,
                 training=training,
+                method=method,
+                beta=beta,
             )
 
         env_fns.append(_make_env)
@@ -97,8 +100,12 @@ def train_agent(
     total_timesteps: int,
     log_dir,
     model_dir,
+    method: str = "rnd",
+    beta: float | None = None,
+    tag: str | None = None,
 ):
-    run_name = f"{env_id}__{variant_name}__seed_{seed}"
+    suffix = f"__{tag}" if tag else ""
+    run_name = f"{env_id}__{variant_name}__{method}__seed_{seed}{suffix}"
     run_name = run_name.replace("/", "_")
 
     algorithm_config = get_algorithm_config()
@@ -111,6 +118,8 @@ def train_agent(
             noise=noise,
             seed=seed,
             training=True,
+            method=method,
+            beta=beta,
         )
         env = Monitor(env, filename=str(log_dir / run_name))
     else:
@@ -123,6 +132,8 @@ def train_agent(
             n_envs=n_envs,
             log_dir=log_dir,
             run_name=run_name,
+            method=method,
+            beta=beta,
         )
 
     eval_env = make_env(
@@ -131,6 +142,8 @@ def train_agent(
         noise=noise,
         seed=seed + 10_000,
         training=False,
+        method=method,
+        beta=beta,
     )
     eval_env = Monitor(eval_env)
 
