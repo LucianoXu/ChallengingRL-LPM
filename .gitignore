@@ -70,3 +70,7 @@ latex_notes/*.toc
 latex_notes/*.fls
 latex_notes/*.fdb_latexmk
 latex_notes/*.synctex.gz
+
+# minigrid_exp local artifacts (live data is under /expr_data/minigrid/)
+minigrid_exp/results/
+minigrid_exp/plots/
