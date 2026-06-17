@@ -63,6 +63,9 @@ LPM_REWARD_SCALE = 0.05
 LPM_LEARNING_RATE = 1e-3
 LPM_HIDDEN_DIM = 128
 LPM_BUFFER_SIZE = 100
+# PPO entropy-coefficient for the non-intrinsic "entropy" exploration arm
+# (exploration via policy stochasticity; no reward shaping). none-arm uses 0.0.
+ENTROPY_COEF = 0.01
 # Count-based (UCB-style) exploration bonus = COUNT_REWARD_SCALE / sqrt(N(obs)).
 COUNT_REWARD_SCALE = 0.05
 # Disabled: keep DoorKey purely sparse (no key/door shaping) for a clean

@@ -20,7 +20,7 @@ import config
 
 RUN_RE = re.compile(
     r"^(?P<env>.+?)__(?P<variant>baseline_no_noise|baseline_noise|"
-    r"intrinsic_no_noise|intrinsic_noise)__(?P<method>rnd|lpm|count|none)__seed_(?P<seed>\d+)"
+    r"intrinsic_no_noise|intrinsic_noise)__(?P<method>rnd|lpm|count|entropy|none)__seed_(?P<seed>\d+)"
     r"(?:__beta(?P<beta>[0-9.eE+-]+))?$")
 
 

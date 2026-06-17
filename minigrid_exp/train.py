@@ -15,6 +15,7 @@ from config import (
     DQN_POLICY_KWARGS,
     DQN_UCB_COEFFICIENT,
     DQN_UCB_STATE_ROUND_DECIMALS,
+    ENTROPY_COEF,
     PPO_EVAL_EPISODES,
     PPO_EVAL_FREQ,
     PPO_HYPERPARAMS,
@@ -110,6 +111,10 @@ def train_agent(
     run_name = run_name.replace("/", "_")
 
     algorithm_config = get_algorithm_config()
+    if ALGORITHM_NAME == "ppo" and method == "entropy":
+        algorithm_config["hyperparams"] = {
+            **algorithm_config["hyperparams"], "ent_coef": ENTROPY_COEF,
+        }
     n_envs = algorithm_config["n_envs"]
 
     if n_envs == 1:

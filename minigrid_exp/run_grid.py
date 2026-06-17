@@ -41,22 +41,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--steps", type=int, default=config.TOTAL_TIMESTEPS)
     ap.add_argument("--seeds", type=int, nargs="+", default=config.SEEDS)
-    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm", "count"])
+    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm"])
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--envs", nargs="+", default=None,
                     help="restrict to these env ids; default = all config envs")
+    ap.add_argument("--variants", nargs="+", default=None,
+                    help="restrict to these variant names; default = all variants")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     os.makedirs("/tmp/minigrid_logs", exist_ok=True)
     envs = a.envs if a.envs else [e for tier in config.ENVIRONMENTS.values() for e in tier]
 
+    variants = VARIANTS
+    if a.variants:
+        variants = [(name, intr, noise) for name, intr, noise in VARIANTS if name in a.variants]
+
     pending = []
-    for env_id, (variant, intrinsic, noise), seed in itertools.product(envs, VARIANTS, a.seeds):
+    for env_id, (variant, intrinsic, noise), seed in itertools.product(envs, variants, a.seeds):
         # Non-intrinsic baselines run once per method-agnostic cell; tag by "none".
-        methods = a.methods if intrinsic else ["none"]
+        methods = a.methods if intrinsic else ["none", "entropy"]
         betas = a.betas if intrinsic else [None]
         for method, beta in itertools.product(methods, betas):
             tag = None if beta is None else f"beta{beta:g}"
