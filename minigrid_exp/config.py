@@ -1,8 +1,10 @@
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
+EXPR_DATA = REPO_ROOT / "expr_data" / "minigrid"
 
-RESULTS_DIR = BASE_DIR / "results"
+RESULTS_DIR = EXPR_DATA / "results"
 
 ALGORITHM_NAME = "dqn"
 ALGORITHM_LABELS = {
@@ -13,7 +15,7 @@ ALGORITHM_LABELS = {
 LOGS_DIR = RESULTS_DIR / "logs" / ALGORITHM_NAME
 MODELS_DIR = RESULTS_DIR / "models" / ALGORITHM_NAME
 VIDEOS_DIR = RESULTS_DIR / "videos" / ALGORITHM_NAME
-PLOTS_DIR = BASE_DIR / "plots" / ALGORITHM_NAME
+PLOTS_DIR = EXPR_DATA / "figures" / ALGORITHM_NAME
 EVAL_RESULTS_PATH = RESULTS_DIR / f"{ALGORITHM_NAME}_evaluation_results.csv"
 EVAL_SUMMARY_PATH = RESULTS_DIR / f"{ALGORITHM_NAME}_evaluation_summary.csv"
 
@@ -23,21 +25,21 @@ VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 ENVIRONMENTS = {
-    #"easy": [
-        #"MiniGrid-Empty-8x8-v0",
-    #    "MiniGrid-DoorKey-5x5-v0",
-    #],
+    "easy": [
+        "MiniGrid-Empty-8x8-v0",
+        "MiniGrid-DoorKey-5x5-v0",
+    ],
     "medium": [
         "MiniGrid-FourRooms-v0",
-        #"MiniGrid-DoorKey-8x8-v0",
+        "MiniGrid-DoorKey-8x8-v0",
     ],
-    #"hard": [
-    #    "MiniGrid-MultiRoom-N6-v0",
-    #    "MiniGrid-KeyCorridorS3R3-v0",
-    #],
+    "hard": [
+        "MiniGrid-MultiRoom-N6-v0",
+        "MiniGrid-KeyCorridorS3R3-v0",
+    ],
 }
 
-SEEDS = [1, 2, 3]
+SEEDS = [1, 2, 3, 4, 5, 6, 7, 8]
 
 TOTAL_TIMESTEPS = 5_000_000
 PARALLEL_WORKERS = 2
@@ -110,28 +112,8 @@ if ALGORITHM_NAME == "dqn":
     )
 
 VARIANTS = [
-  {
-        "name": "baseline_no_noise",
-        "intrinsic": False,
-        "noise": False,
-    },
-    ]
-'''  
-{
-        "name": "intrinsic_no_noise",
-        "intrinsic": True,
-        "noise": False,
-    }
-    ,{
-        "name": "baseline_noise",
-        "intrinsic": False,
-        "noise": True,
-    },'''
-    
-'''
-    {
-        "name": "intrinsic_noise",
-        "intrinsic": True,
-        "noise": True,
-    },
-'''
+    {"name": "baseline_no_noise",  "intrinsic": False, "noise": False},
+    {"name": "intrinsic_no_noise", "intrinsic": True,  "noise": False},
+    {"name": "baseline_noise",     "intrinsic": False, "noise": True},
+    {"name": "intrinsic_noise",    "intrinsic": True,  "noise": True},
+]
