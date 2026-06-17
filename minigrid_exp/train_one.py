@@ -15,7 +15,7 @@ def main():
     ap.add_argument("--env", required=True)
     ap.add_argument("--intrinsic", action="store_true")
     ap.add_argument("--noise", action="store_true")
-    ap.add_argument("--method", default="rnd", choices=["rnd", "lpm", "none"])
+    ap.add_argument("--method", default="rnd", choices=["rnd", "lpm", "count", "none"])
     ap.add_argument("--beta", type=float, default=None)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--steps", type=int, default=TOTAL_TIMESTEPS)

@@ -6,6 +6,7 @@ from gymnasium.wrappers import FlattenObservation
 
 from config import (
     ALGORITHM_NAME,
+    COUNT_REWARD_SCALE,
     DQN_DOOR_OPEN_BONUS,
     DQN_DOORKEY_SUBGOAL_REWARDS,
     DQN_DEFAULT_ACTIONS,
@@ -31,6 +32,7 @@ from config import (
 from wrappers.noise_wrapper import ObservationNoiseWrapper
 from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
 from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
+from wrappers.count_wrapper import CountBasedExplorationWrapper
 from wrappers.reward_split_wrapper import EpisodeRewardSplitWrapper
 
 
@@ -185,6 +187,12 @@ def make_env(
                 normalize_rewards=RND_NORMALIZE_REWARDS,
                 observation_clip=RND_OBSERVATION_CLIP,
                 device=RND_DEVICE,
+                seed=seed,
+            )
+        elif method == "count":
+            env = CountBasedExplorationWrapper(
+                env,
+                reward_scale=COUNT_REWARD_SCALE if beta is None else beta,
                 seed=seed,
             )
         else:

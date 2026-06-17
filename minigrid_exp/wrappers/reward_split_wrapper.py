@@ -30,7 +30,8 @@ class EpisodeRewardSplitWrapper(gym.Wrapper):
         self._ep_ext += float(info.get("extrinsic_reward", reward))
         self._ep_intr += float(
             info.get("rnd_intrinsic_reward",
-                     info.get("lpm_intrinsic_reward", 0.0)))
+                     info.get("lpm_intrinsic_reward",
+                              info.get("count_intrinsic_reward", 0.0))))
         if terminated or truncated:
             info["ep_extrinsic"] = self._ep_ext
             info["ep_intrinsic"] = self._ep_intr

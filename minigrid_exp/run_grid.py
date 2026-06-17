@@ -41,7 +41,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--steps", type=int, default=config.TOTAL_TIMESTEPS)
     ap.add_argument("--seeds", type=int, nargs="+", default=config.SEEDS)
-    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm"])
+    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm", "count"])
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
     ap.add_argument("--jobs", type=int, default=8)
