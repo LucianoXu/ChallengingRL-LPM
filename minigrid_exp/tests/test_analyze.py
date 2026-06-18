@@ -9,7 +9,13 @@ def test_parse_run_name():
     p = analyze.parse_run_name(
         "MiniGrid-FourRooms-v0__intrinsic_noise__lpm__seed_3__beta0.05")
     assert p == {"env": "MiniGrid-FourRooms-v0", "variant": "intrinsic_noise",
-                 "method": "lpm", "seed": 3, "beta": "0.05"}
+                 "method": "lpm", "seed": 3, "beta": "0.05", "np": None}
+
+
+def test_parse_run_name_noise_tag():
+    p = analyze.parse_run_name(
+        "MiniGrid-FourRooms-v0__intrinsic_noise__rnd__seed_1__np0.2")
+    assert p["np"] == "0.2" and p["beta"] is None and p["method"] == "rnd"
 
 
 def test_parse_run_name_no_beta():

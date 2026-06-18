@@ -26,7 +26,7 @@ import config
 RUN_RE = re.compile(
     r"^(?P<env>.+?)__(?P<variant>baseline_no_noise|baseline_noise|"
     r"intrinsic_no_noise|intrinsic_noise)__(?P<method>rnd|lpm|count|entropy|none)__seed_(?P<seed>\d+)"
-    r"(?:__beta(?P<beta>[0-9.eE+-]+))?$")
+    r"(?:__beta(?P<beta>[0-9.eE+-]+))?(?:__np(?P<np>[0-9.eE+-]+))?$")
 
 
 def parse_run_name(name: str):
@@ -35,7 +35,7 @@ def parse_run_name(name: str):
         return None
     d = m.groupdict()
     return {"env": d["env"], "variant": d["variant"], "method": d["method"],
-            "seed": int(d["seed"]), "beta": d["beta"]}
+            "seed": int(d["seed"]), "beta": d["beta"], "np": d["np"]}
 
 
 def load_eval_npz(path: str):
@@ -94,7 +94,7 @@ def aggregate_eval_curves(logs_dir: str) -> pd.DataFrame:
 
 
 def summarize(df: pd.DataFrame) -> pd.DataFrame:
-    g = df.groupby(["env", "variant", "method", "beta", "timestep"], dropna=False)
+    g = df.groupby(["env", "variant", "method", "beta", "np", "timestep"], dropna=False)
     return g["mean_return"].agg(["mean", "std", "count"]).reset_index()
 
 
@@ -103,9 +103,9 @@ def plot_curves(summary: pd.DataFrame, out_dir: str):
     for env in sorted(summary["env"].unique()):
         sub = summary[summary["env"] == env]
         plt.figure(figsize=(7, 5))
-        for (variant, method, beta), s in sub.groupby(["variant", "method", "beta"], dropna=False):
+        for (variant, method, beta, npv), s in sub.groupby(["variant", "method", "beta", "np"], dropna=False):
             s = s.sort_values("timestep")
-            label = f"{variant}/{method}" + (f"/b{beta}" if beta else "")
+            label = f"{variant}/{method}" + (f"/b{beta}" if beta else "") + (f"/np{npv}" if npv else "")
             plt.plot(s["timestep"], s["mean"], label=label)
             plt.fill_between(s["timestep"], s["mean"] - s["std"], s["mean"] + s["std"], alpha=0.15)
         plt.xlabel("training step"); plt.ylabel("eval mean return")
@@ -116,13 +116,13 @@ def plot_curves(summary: pd.DataFrame, out_dir: str):
 
 def final_success_table(df: pd.DataFrame, frac: float = 0.1) -> pd.DataFrame:
     out = []
-    for keys, s in df.groupby(["env", "variant", "method", "beta", "seed"], dropna=False):
+    for keys, s in df.groupby(["env", "variant", "method", "beta", "np", "seed"], dropna=False):
         s = s.sort_values("timestep")
         k = max(1, int(len(s) * frac))
-        out.append({**dict(zip(["env", "variant", "method", "beta", "seed"], keys)),
+        out.append({**dict(zip(["env", "variant", "method", "beta", "np", "seed"], keys)),
                     "final_return": s["mean_return"].tail(k).mean()})
     fdf = pd.DataFrame(out)
-    return (fdf.groupby(["env", "variant", "method", "beta"], dropna=False)["final_return"]
+    return (fdf.groupby(["env", "variant", "method", "beta", "np"], dropna=False)["final_return"]
             .agg(["mean", "std", "count"]).reset_index())
 
 

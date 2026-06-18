@@ -123,6 +123,27 @@ Final eval return:
   for unpredictable noise (its robustness virtue) and for already-learned local dynamics (so it
   under-explores clean hard tasks vs RND's aggressive novelty-seeking). MultiRoom shows the *cost* side.
 
+### 6. FourRooms noise-robustness — RND vs LPM vs observation-noise ratio (1M, 3 seeds)
+
+Final eval return vs `noise_prob` (per-element observation corruption probability):
+
+| method | np=0.0 | np=0.1 | np=0.2 | np=0.3 |
+|---|---|---|---|---|
+| none | 0.32 | 0.065 | 0.045 | 0.053 |
+| entropy | 0.27 | 0.076 | 0.056 | 0.051 |
+| rnd | **0.32** | **0.036** | 0.024 | 0.024 |
+| lpm | 0.18 | **0.073** | 0.052 | 0.045 |
+
+- **Rank flip — LPM is relatively more noise-robust than RND (partial support for the LPM-paper claim):**
+  clean (np=0), RND is best (0.32), LPM modest (0.18); under noise, **RND collapses the MOST**
+  (0.32 -> 0.036, becomes the *worst*) while **LPM degrades least** and ends ABOVE RND at every noise
+  level. Mechanism: noise makes every observation look novel -> RND chases noise everywhere and loses
+  its lead; LPM's learning-progress signal stays ~0 on unlearnable noise -> not distracted.
+- **Caveat — GLOBAL observation noise, not a localized noisy-TV:** even 10% corruption devastates ALL
+  methods (all -> ~0.05) because it corrupts the policy's own perception, not just the intrinsic signal.
+  So the finding is "LPM degrades LESS," not "LPM stays solved" — a relative-ordering flip near the
+  failure floor. (The clean noisy-TV distractor demonstration is the earlier MiniWorld maze result.)
+
 ## Key takeaways so far
 
 1. **Mixing coefficient beta matters enormously and is env-dependent.** Too large (0.05) drowns the
@@ -136,12 +157,15 @@ Final eval return:
    aggressiveness for its noise-robustness (the upside was shown earlier in the MiniWorld maze).
 5. **Architecture matters:** memory-requiring tasks (KeyCorridor) are out of reach for a feedforward
    MLP regardless of exploration.
+6. **Under observation noise (RQ4, FourRooms), LPM is relatively more robust than RND** — RND collapses
+   most (loses its clean lead, becomes worst), LPM degrades least (ends above RND at every noise level).
+   But *global* obs-noise breaks every method's perception (~0.05 by 10% noise), so it's "degrades less,"
+   not "stays solved." Directionally supports the LPM noise-robustness thesis; the clean noisy-TV
+   demonstration is the MiniWorld maze.
 
 ## Pending
 
-- **Noise-robustness (RQ4):** since LPM ~0 even on *clean* MultiRoom-N6, the MiniGrid noise test is
-  reframed as: does observation noise *break RND* (collapse its 0.28-0.32 -> 0 by making it chase
-  noisy novelty)? That reproduces the prediction-error noise-vulnerability in MiniGrid. LPM's
-  robustness *upside* was already demonstrated in the MiniWorld maze. Plan: noisy MultiRoom-N6,
-  rnd (beta=0.005) + lpm, observation-noise-ratio sweep.
-- (DoorKey-5x5 easy tier not yet run at the tuned beta.)
+- (DoorKey-5x5 easy tier not yet run at the tuned beta — likely intrinsic-unneeded like FourRooms.)
+- Optional: noise-ratio sweep on the *hard* env, and/or a localized noisy-TV variant in MiniGrid for a
+  cleaner distractor (vs the current global obs-noise).
+- Hand off to analysis/report (figures in `figures/`, tables in `figures/table_final_success.csv`).
