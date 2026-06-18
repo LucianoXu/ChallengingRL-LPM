@@ -101,10 +101,27 @@ across all methods, 3 seeds, 3M steps (~36M env-steps): no episode *ever* reache
   bonus must be strong enough to *drive* exploration, and 0.001 is likely too weak (RND used 0.005).
   -> motivated the MultiRoom-N6 beta sweep (below).
 
-### 5. MultiRoom-N6 beta sweep (rnd + lpm x beta in {0.005, 0.01, 0.05}, 3 seeds, 2M) — IN PROGRESS
+### 5. MultiRoom-N6 beta sweep (rnd + lpm x beta in {0.005, 0.01, 0.05}, 3 seeds, 2M)
 
-Goal: find LPM's working beta on the hard env (does it also solve MultiRoom?) and confirm RND's
-robustness across beta. Results pending. [UPDATE ON COMPLETION]
+Final eval return:
+
+| method | b=0.005 | b=0.01 | b=0.05 |
+|---|---|---|---|
+| rnd | **0.28** | 0.00 | 0.00 |
+| lpm | 0.00 | 0.00 | 0.00 |
+
+- **RND solves only at b=0.005 (sweet spot).** At b=0.01/0.05 RND DOES reach the goal in stochastic
+  *training* (max train reward 0.69-0.78) but fails to converge to a reliable *deterministic* policy
+  (eval ~0) — too-large intrinsic keeps it chasing novelty and it never settles into exploitation.
+  So even on a hard task beta has a sweet spot (~0.005): too small under-explores, too large won't converge.
+- **LPM = 0 at EVERY beta** — its failure is not a beta artifact. Mechanism (from per-episode
+  intrinsic magnitudes): RND's bonus is **always positive** (mean = abs, e.g. +0.28 at b=0.005) =>
+  consistent directional novelty drive; LPM's bonus is **signed and nets ~0** per episode
+  (mean +0.08 vs abs 0.33) => no coherent exploration push, agent behaves ~like baseline. Raising
+  beta scales LPM's oscillation amplitude, not its directionality (b=0.05: mean +0.67 vs abs 4.0),
+  so no beta rescues it. This is LPM's designed trade-off: the learning-progress signal goes ~0 both
+  for unpredictable noise (its robustness virtue) and for already-learned local dynamics (so it
+  under-explores clean hard tasks vs RND's aggressive novelty-seeking). MultiRoom shows the *cost* side.
 
 ## Key takeaways so far
 
@@ -113,13 +130,18 @@ robustness across beta. Results pending. [UPDATE ON COMPLETION]
 2. **Intrinsic motivation's benefit is difficulty-gated:** no help (slight harm) on medium FourRooms;
    decisive win (RND) on hard MultiRoom-N6.
 3. **RND solved hard exploration where the baseline + entropy could not** — the headline result.
-4. **LPM-vs-RND is not yet a fair comparison** (LPM's beta needs re-tuning per env); pending the sweep.
+4. **RND > LPM on clean hard exploration, at EVERY beta tested** — not a tuning artifact. RND's
+   always-positive novelty bonus drives exploration (sweet spot beta~0.005); LPM's signed
+   learning-progress bonus nets ~0 per episode and under-explores. LPM trades exploration
+   aggressiveness for its noise-robustness (the upside was shown earlier in the MiniWorld maze).
 5. **Architecture matters:** memory-requiring tasks (KeyCorridor) are out of reach for a feedforward
    MLP regardless of exploration.
 
 ## Pending
 
-- Finish the MultiRoom-N6 beta sweep -> fair LPM-vs-RND on the hard env.
-- **Noise-robustness (RQ4):** LPM vs RND on noisy MultiRoom-N6 (observation-noise ratio sweep) —
-  does LPM degrade less than RND under noise? (Requires LPM working at a good beta first.)
+- **Noise-robustness (RQ4):** since LPM ~0 even on *clean* MultiRoom-N6, the MiniGrid noise test is
+  reframed as: does observation noise *break RND* (collapse its 0.28-0.32 -> 0 by making it chase
+  noisy novelty)? That reproduces the prediction-error noise-vulnerability in MiniGrid. LPM's
+  robustness *upside* was already demonstrated in the MiniWorld maze. Plan: noisy MultiRoom-N6,
+  rnd (beta=0.005) + lpm, observation-noise-ratio sweep.
 - (DoorKey-5x5 easy tier not yet run at the tuned beta.)
