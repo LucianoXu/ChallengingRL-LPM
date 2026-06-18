@@ -144,6 +144,33 @@ Final eval return vs `noise_prob` (per-element observation corruption probabilit
   So the finding is "LPM degrades LESS," not "LPM stays solved" — a relative-ordering flip near the
   failure floor. (The clean noisy-TV distractor demonstration is the earlier MiniWorld maze result.)
 
+### 7. DoorKey-5x5 (easy) — clean + noise (1M, 3 seeds)  ★ CLEANEST noise-robustness result
+
+| method | clean | noisy np=0.1 |
+|---|---|---|
+| none | 0.93 | 0.95 |
+| entropy | 0.96 | 0.95 |
+| rnd | 0.82 | **0.035** |
+| lpm | 0.61 (±0.53, bimodal) | **0.95** |
+
+- **Clean:** baseline best (~0.93-0.96); intrinsic unneeded — rnd slightly lower (0.82), lpm unreliable
+  (0.61, high variance). Confirms the easy/medium "intrinsic unneeded" regime (same as FourRooms).
+- **Noise = the clean noisy-TV reproduction in MiniGrid:** RND **collapses** (0.82 -> 0.035 — its
+  novelty bonus is hijacked by the noisy observations, so it chases noise instead of the goal), while
+  **LPM is robust (0.61 -> 0.95, becomes as reliable as the baseline)** and the baseline is robust
+  (none/entropy 0.95). Mechanism: under noise LPM's learning-progress signal -> ~0 (noise is
+  unlearnable) so LPM effectively reverts to the plain policy and still solves; RND's prediction-error
+  signal stays high on noise and derails it.
+- **Why cleaner than FourRooms:** DoorKey-5x5 is tiny, so 10% obs-noise does NOT stop none/entropy/lpm
+  from solving (perception survives) — this **isolates the intrinsic-reward noise-vulnerability (RND)
+  from perception degradation**. Result is a dramatic rank flip: clean rnd>lpm, noisy lpm(0.95)>>rnd(0.035).
+
+### 8. MultiRoom-N6 (hard) — noisy (np 0.1, 0.2; 2M, 3 seeds)
+
+All methods = **0.000** at both noise levels (RND's clean 0.32 -> 0). On the hard env, global obs-noise
+breaks perception for everyone (as in FourRooms), so RND's clean-exploration win does not survive noise
+and nobody solves. (No LPM advantage shown here since LPM was already 0 on clean MultiRoom.)
+
 ## Key takeaways so far
 
 1. **Mixing coefficient beta matters enormously and is env-dependent.** Too large (0.05) drowns the
@@ -157,15 +184,20 @@ Final eval return vs `noise_prob` (per-element observation corruption probabilit
    aggressiveness for its noise-robustness (the upside was shown earlier in the MiniWorld maze).
 5. **Architecture matters:** memory-requiring tasks (KeyCorridor) are out of reach for a feedforward
    MLP regardless of exploration.
-6. **Under observation noise (RQ4, FourRooms), LPM is relatively more robust than RND** — RND collapses
-   most (loses its clean lead, becomes worst), LPM degrades least (ends above RND at every noise level).
-   But *global* obs-noise breaks every method's perception (~0.05 by 10% noise), so it's "degrades less,"
-   not "stays solved." Directionally supports the LPM noise-robustness thesis; the clean noisy-TV
-   demonstration is the MiniWorld maze.
+6. **LPM is noise-robust, RND is noise-vulnerable (RQ4, reproduced in MiniGrid).** Cleanest on
+   DoorKey-5x5 (§7), where perception survives 10% noise so the intrinsic-reward effect is isolated:
+   **RND collapses (0.82 -> 0.035) while LPM stays robust (-> 0.95, like the baseline).** On FourRooms
+   the same ordering holds (RND hurt most, LPM least) but global noise also degrades perception for all;
+   on hard MultiRoom noise breaks everyone. So prediction-error novelty (RND) gets distracted by noise;
+   LPM's learning-progress signal ignores unlearnable noise. This reproduces the LPM-paper claim
+   (also shown earlier in the MiniWorld maze).
 
-## Pending
+## Status: SPEC experiment list complete
 
-- (DoorKey-5x5 easy tier not yet run at the tuned beta — likely intrinsic-unneeded like FourRooms.)
-- Optional: noise-ratio sweep on the *hard* env, and/or a localized noisy-TV variant in MiniGrid for a
-  cleaner distractor (vs the current global obs-noise).
-- Hand off to analysis/report (figures in `figures/`, tables in `figures/table_final_success.csv`).
+Difficulty ladder (easy DoorKey-5x5 / medium FourRooms / hard MultiRoom-N6), clean + noisy, all 4
+methods, beta sweep, and trace GIFs (`figures/traces/`) are all done. Tables in
+`figures/table_final_success.csv`, sample-efficiency curves in `figures/fig_sample_efficiency_*.png`.
+
+Optional extensions (not required by SPEC): a *localized* noisy-TV MiniGrid variant (cleaner distractor
+than the current global obs-noise); a RecurrentPPO/LSTM agent to make KeyCorridor (memory task) solvable.
+Ready to hand off to analysis / report.
