@@ -1,8 +1,8 @@
 """Process-parallel grid runner for the MiniGrid intrinsic-reward experiments.
 
-One subprocess per (env, variant, method, beta, seed) cell — process-level
+One subprocess per (env, variant, method, beta, seed) cell -- process-level
 parallelism (the GIL makes thread pools poor for SB3 stepping). Resumable: a
-cell is complete iff its saved model .zip exists under expr_data/minigrid.
+cell is complete iff its progress sidecar records >= total requested steps.
 
 Usage:
   PYTHONPATH=. python run_grid.py --steps 1000000 --jobs 32
@@ -28,10 +28,18 @@ PY = os.path.join(os.path.dirname(EXP), "LPM_exploration", ".venv", "bin", "pyth
 VARIANTS = [(v["name"], v["intrinsic"], v["noise"]) for v in config.VARIANTS]
 
 
-def cell_complete(env_id, variant, method, seed, tag):
+def cell_complete(env_id, variant, method, seed, tag, total_steps):
+    """Return True iff the progress sidecar shows >= total_steps completed."""
     suffix = f"__{tag}" if tag else ""
     run_name = f"{env_id}__{variant}__{method}__seed_{seed}{suffix}".replace("/", "_")
-    return os.path.exists(os.path.join(config.MODELS_DIR, f"{run_name}.zip"))
+    sidecar = os.path.join(config.MODELS_DIR, f"{run_name}.progress")
+    if not os.path.exists(sidecar):
+        return False
+    try:
+        progress = int(open(sidecar).read().strip())
+        return progress >= total_steps
+    except (ValueError, OSError):
+        return False
 
 
 def run_cell(cmd, logfile, threads):
@@ -48,6 +56,8 @@ def run_cell(cmd, logfile, threads):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--steps", type=int, default=config.TOTAL_TIMESTEPS)
+    ap.add_argument("--chunk-steps", type=int, default=config.CHUNK_STEPS,
+                    help="max timesteps per chunk (default: config.CHUNK_STEPS)")
     ap.add_argument("--seeds", type=int, nargs="+", default=config.SEEDS)
     ap.add_argument("--methods", nargs="+", default=["rnd", "lpm"])
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
@@ -76,10 +86,11 @@ def main():
         betas = a.betas if intrinsic else [None]
         for method, beta in itertools.product(methods, betas):
             tag = None if beta is None else f"beta{beta:g}"
-            if cell_complete(env_id, variant, method, seed, tag):
+            if cell_complete(env_id, variant, method, seed, tag, a.steps):
                 continue
             cmd = [PY, os.path.join(EXP, "train_one.py"), "--env", env_id,
-                   "--method", method, "--seed", str(seed), "--steps", str(a.steps)]
+                   "--method", method, "--seed", str(seed), "--steps", str(a.steps),
+                   "--chunk-steps", str(a.chunk_steps)]
             if intrinsic:
                 cmd.append("--intrinsic")
             if noise:
@@ -91,7 +102,7 @@ def main():
 
     # Default to 1 thread/job: proven clean (the 72-run OMP=1 grid had 0 failures),
     # and cranking OMP threads neither sped runs up (375 vs 414 fps) nor saturated
-    # the box productively — it correlated with SIGKILLs of the heavier runs.
+    # the box productively -- it correlated with SIGKILLs of the heavier runs.
     # Opt in to more via --threads-per-job only after validating memory safety.
     cores = os.cpu_count() or 8
     threads = a.threads_per_job or 1
@@ -110,7 +121,7 @@ def main():
             try:
                 rc = fut.result()
             except Exception as exc:  # don't let one cell abort the whole grid
-                rc, exc_note = 1, f" — exception: {exc}"
+                rc, exc_note = 1, f" -- exception: {exc}"
             else:
                 exc_note = ""
             if rc == 0:

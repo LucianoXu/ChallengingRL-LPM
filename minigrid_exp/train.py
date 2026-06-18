@@ -7,6 +7,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 from algorithms import get_algorithm_class
 from config import (
     ALGORITHM_NAME,
+    CHUNK_STEPS,
     DQN_EVAL_EPISODES,
     DQN_EVAL_FREQ,
     DQN_EXPLORATION_STRATEGY,
@@ -16,6 +17,7 @@ from config import (
     DQN_UCB_COEFFICIENT,
     DQN_UCB_STATE_ROUND_DECIMALS,
     ENTROPY_COEF,
+    MODELS_DIR,
     PPO_EVAL_EPISODES,
     PPO_VEC_ENV,
     PPO_EVAL_FREQ,
@@ -101,6 +103,23 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
     return VecMonitor(env, info_keywords=("ep_extrinsic", "ep_intrinsic"))
 
 
+def _read_progress(run_name: str) -> int:
+    """Return steps completed so far from the sidecar file, or 0 if absent."""
+    sidecar = MODELS_DIR / f"{run_name}.progress"
+    if sidecar.exists():
+        try:
+            return int(sidecar.read_text().strip())
+        except (ValueError, OSError):
+            return 0
+    return 0
+
+
+def _write_progress(run_name: str, steps: int) -> None:
+    """Overwrite the sidecar file with the new progress value."""
+    sidecar = MODELS_DIR / f"{run_name}.progress"
+    sidecar.write_text(str(steps))
+
+
 def train_agent(
     env_id: str,
     variant_name: str,
@@ -113,10 +132,18 @@ def train_agent(
     method: str = "rnd",
     beta: float | None = None,
     tag: str | None = None,
+    chunk_steps: int = CHUNK_STEPS,
 ):
     suffix = f"__{tag}" if tag else ""
     run_name = f"{env_id}__{variant_name}__{method}__seed_{seed}{suffix}"
     run_name = run_name.replace("/", "_")
+
+    # --- Resume / early-exit logic ---
+    progress = _read_progress(run_name)
+    if progress >= total_timesteps:
+        # Cell already complete -- nothing to do.
+        ckpt_path = model_dir / f"{run_name}.zip"
+        return ckpt_path
 
     algorithm_config = get_algorithm_config()
     if ALGORITHM_NAME == "ppo" and method == "entropy":
@@ -162,48 +189,59 @@ def train_agent(
     )
     eval_env = Monitor(eval_env)
 
-    best_model_dir = model_dir / "best" / run_name
+    # --- Load checkpoint or build fresh model ---
+    ckpt_path = model_dir / f"{run_name}.zip"
+    model_class = algorithm_config["class"]
+    device = algorithm_config["hyperparams"].get("device", "auto")
+
+    if ckpt_path.exists():
+        model = model_class.load(str(ckpt_path), env=env, device=device)
+        # Re-apply entropy override when resuming
+        if ALGORITHM_NAME == "ppo" and method == "entropy":
+            model.ent_coef = ENTROPY_COEF
+    else:
+        model = model_class(
+            policy=algorithm_config["policy"],
+            env=env,
+            verbose=1,
+            seed=seed,
+            tensorboard_log=str(log_dir),
+            policy_kwargs=algorithm_config["policy_kwargs"],
+            **algorithm_config["hyperparams"],
+        )
+
+    # --- Chunk size ---
+    this_chunk = min(chunk_steps, total_timesteps - progress)
+
+    # --- Unique eval dirs per chunk ---
+    chunk_tag = f"c{progress}"
+    eval_log_path = log_dir / "eval" / run_name / chunk_tag
+    eval_log_path.mkdir(parents=True, exist_ok=True)
+    best_model_dir = model_dir / "best" / run_name / chunk_tag
     best_model_dir.mkdir(parents=True, exist_ok=True)
 
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=str(best_model_dir),
-        log_path=str(log_dir / "eval" / run_name),
+        log_path=str(eval_log_path),
         eval_freq=algorithm_config["eval_freq"],
         n_eval_episodes=algorithm_config["eval_episodes"],
         deterministic=True,
         render=False,
     )
 
-    model_class = algorithm_config["class"]
-    model = model_class(
-        policy=algorithm_config["policy"],
-        env=env,
-        verbose=1,
-        seed=seed,
-        tensorboard_log=str(log_dir),
-        policy_kwargs=algorithm_config["policy_kwargs"],
-        **algorithm_config["hyperparams"],
-    )
-
     model.learn(
-        total_timesteps=total_timesteps,
+        total_timesteps=this_chunk,
+        reset_num_timesteps=(progress == 0),
         tb_log_name=run_name,
         callback=eval_callback,
     )
 
-    model_path = model_dir / f"{run_name}.zip"
-    last_model_dir = model_dir / "last"
-    last_model_dir.mkdir(parents=True, exist_ok=True)
-    model.save(last_model_dir / f"{run_name}.zip")
-
-    best_model_path = best_model_dir / "best_model.zip"
-    if best_model_path.exists():
-        shutil.copy2(best_model_path, model_path)
-    else:
-        model.save(model_path)
+    # --- Save checkpoint and update progress ---
+    model.save(str(ckpt_path))
+    _write_progress(run_name, progress + this_chunk)
 
     env.close()
     eval_env.close()
 
-    return model_path
+    return ckpt_path

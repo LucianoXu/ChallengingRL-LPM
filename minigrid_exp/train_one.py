@@ -6,7 +6,7 @@ Example:
 """
 import argparse
 
-from config import LOGS_DIR, MODELS_DIR, TOTAL_TIMESTEPS
+from config import CHUNK_STEPS, LOGS_DIR, MODELS_DIR, TOTAL_TIMESTEPS
 from train import train_agent
 
 
@@ -19,6 +19,8 @@ def main():
     ap.add_argument("--beta", type=float, default=None)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--steps", type=int, default=TOTAL_TIMESTEPS)
+    ap.add_argument("--chunk-steps", type=int, default=CHUNK_STEPS,
+                    help="max timesteps per chunk (default: config.CHUNK_STEPS)")
     a = ap.parse_args()
 
     intrinsic = a.intrinsic and a.method in ("rnd", "lpm")
@@ -28,7 +30,7 @@ def main():
     train_agent(
         env_id=a.env, variant_name=variant, intrinsic=intrinsic, noise=a.noise,
         seed=a.seed, total_timesteps=a.steps, log_dir=LOGS_DIR, model_dir=MODELS_DIR,
-        method=a.method, beta=a.beta, tag=tag,
+        method=a.method, beta=a.beta, tag=tag, chunk_steps=a.chunk_steps,
     )
 
 
