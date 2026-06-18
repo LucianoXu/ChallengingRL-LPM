@@ -28,7 +28,11 @@ PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 ENVIRONMENTS = {
     "easy": ["MiniGrid-DoorKey-5x5-v0"],
     "medium": ["MiniGrid-FourRooms-v0"],
-    "hard": ["MiniGrid-KeyCorridorS3R3-v0"],
+    # MultiRoom-N6: long-horizon navigation (6-room chain to a sparse goal),
+    # memory-free (doors just toggle open, no key) so an MLP can solve it, but
+    # exploration-hard. KeyCorridorS3R3 was unsolvable by the MLP agent (needs
+    # key-carry memory -> 0 reward for all methods at 3M).
+    "hard": ["MiniGrid-MultiRoom-N6-v0"],
 }
 
 SEEDS = [1, 2, 3]
