@@ -62,6 +62,8 @@ def main():
     ap.add_argument("--methods", nargs="+", default=["rnd", "lpm"])
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
+    ap.add_argument("--noise-probs", type=float, nargs="+", default=[0.10],
+                    help="observation noise probabilities to sweep (noise variants only)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--threads-per-job", type=int, default=0,
                     help="CPU threads per run (OMP/MKL/...); 0 = auto (cores // jobs, min 1) to saturate the box")
@@ -84,8 +86,14 @@ def main():
         # Non-intrinsic baselines run once per method-agnostic cell; tag by "none".
         methods = a.methods if intrinsic else ["none", "entropy"]
         betas = a.betas if intrinsic else [None]
-        for method, beta in itertools.product(methods, betas):
-            tag = None if beta is None else f"beta{beta:g}"
+        noise_probs = a.noise_probs if noise else [0.10]
+        for method, beta, noise_prob in itertools.product(methods, betas, noise_probs):
+            parts = []
+            if beta is not None:
+                parts.append(f"beta{beta:g}")
+            if noise:
+                parts.append(f"np{noise_prob:g}")
+            tag = "_".join(parts) or None
             if cell_complete(env_id, variant, method, seed, tag, a.steps):
                 continue
             cmd = [PY, os.path.join(EXP, "train_one.py"), "--env", env_id,
@@ -97,6 +105,7 @@ def main():
                 cmd.append("--noise")
             if beta is not None:
                 cmd += ["--beta", str(beta)]
+            cmd += ["--noise-prob", str(noise_prob)]
             rid = f"{env_id}__{variant}__{method}__s{seed}" + (f"__{tag}" if tag else "")
             pending.append((rid.replace("/", "_"), cmd))
 

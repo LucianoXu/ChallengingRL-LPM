@@ -17,6 +17,7 @@ def main():
     ap.add_argument("--noise", action="store_true")
     ap.add_argument("--method", default="rnd", choices=["rnd", "lpm", "count", "entropy", "none"])
     ap.add_argument("--beta", type=float, default=None)
+    ap.add_argument("--noise-prob", type=float, default=0.10)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--steps", type=int, default=TOTAL_TIMESTEPS)
     ap.add_argument("--chunk-steps", type=int, default=CHUNK_STEPS,
@@ -25,12 +26,18 @@ def main():
 
     intrinsic = a.intrinsic and a.method in ("rnd", "lpm")
     variant = f"{'intrinsic' if intrinsic else 'baseline'}_{'noise' if a.noise else 'no_noise'}"
-    tag = None if a.beta is None else f"beta{a.beta:g}"
+    parts = []
+    if a.beta is not None:
+        parts.append(f"beta{a.beta:g}")
+    if a.noise:
+        parts.append(f"np{a.noise_prob:g}")
+    tag = "_".join(parts) or None
 
     train_agent(
         env_id=a.env, variant_name=variant, intrinsic=intrinsic, noise=a.noise,
         seed=a.seed, total_timesteps=a.steps, log_dir=LOGS_DIR, model_dir=MODELS_DIR,
         method=a.method, beta=a.beta, tag=tag, chunk_steps=a.chunk_steps,
+        noise_prob=a.noise_prob,
     )
 
 

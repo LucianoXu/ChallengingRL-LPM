@@ -69,7 +69,7 @@ def get_algorithm_config():
 
 
 def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, run_name,
-                    method="rnd", beta=None):
+                    method="rnd", beta=None, noise_prob=0.10):
     env_fns = []
 
     for env_index in range(n_envs):
@@ -81,6 +81,7 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
                 intrinsic=intrinsic,
                 noise=noise,
                 seed=env_seed,
+                noise_prob=noise_prob,
                 training=training,
                 method=method,
                 beta=beta,
@@ -133,6 +134,7 @@ def train_agent(
     beta: float | None = None,
     tag: str | None = None,
     chunk_steps: int = CHUNK_STEPS,
+    noise_prob: float = 0.10,
 ):
     suffix = f"__{tag}" if tag else ""
     run_name = f"{env_id}__{variant_name}__{method}__seed_{seed}{suffix}"
@@ -158,6 +160,7 @@ def train_agent(
             intrinsic=intrinsic,
             noise=noise,
             seed=seed,
+            noise_prob=noise_prob,
             training=True,
             method=method,
             beta=beta,
@@ -176,6 +179,7 @@ def train_agent(
             run_name=run_name,
             method=method,
             beta=beta,
+            noise_prob=noise_prob,
         )
 
     eval_env = make_env(
@@ -183,6 +187,7 @@ def train_agent(
         intrinsic=intrinsic,
         noise=noise,
         seed=seed + 10_000,
+        noise_prob=noise_prob,
         training=False,
         method=method,
         beta=beta,
