@@ -51,7 +51,9 @@ DQN_EXPLORATION_LABELS = {
 DQN_UCB_COEFFICIENT = 1.0
 DQN_UCB_STATE_ROUND_DECIMALS = None
 INTRINSIC_REWARD_METHOD = "rnd"
-RND_REWARD_SCALE = 0.05
+# beta sweep (FourRooms, 500k): 0.05 catastrophically drowns the sparse extrinsic
+# signal (return -> 0); usable range ~0.001-0.005. RND peaks ~0.005.
+RND_REWARD_SCALE = 0.005
 RND_LEARNING_RATE = 1e-4
 RND_HIDDEN_DIM = 128
 RND_OUTPUT_DIM = 128
@@ -59,7 +61,8 @@ RND_NORMALIZE_OBSERVATIONS = True
 RND_NORMALIZE_REWARDS = True
 RND_OBSERVATION_CLIP = 5.0
 RND_DEVICE = "auto"
-LPM_REWARD_SCALE = 0.05
+# LPM declines monotonically with beta on FourRooms; use a small value.
+LPM_REWARD_SCALE = 0.001
 LPM_LEARNING_RATE = 1e-3
 LPM_HIDDEN_DIM = 128
 LPM_BUFFER_SIZE = 100
