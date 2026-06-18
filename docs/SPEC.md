@@ -24,7 +24,7 @@ Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
 2. Reproducting LPM paper (check report 2)
 
     1. Miniworld environment, explanation, demonstration
-    2. Setup and metrics
+    2. Model, Setup and metrics
     3. TV-action share
     5. Coverage curve for different methods. Our experiments indicates larger variance and LPM is not the best.
     4. Coverage heatmap
@@ -33,11 +33,12 @@ Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
 
 3. Intrinsic Reward and LPM
 
-    1. Introduce environment and setup
-    2. Sweep results of different beta (intrinsic reward coefficient)
-    3. Success rate of different exploration methods on different environments (clean and noisy)
-    4. Demonstration of traces
-    5. Comparison of LPM and RND on clean and noisy performance gap.
+    1. Introduce environments
+    2. Model, Setup
+    3. Sweep results of different beta (intrinsic reward coefficient)
+    4. Success rate of different exploration methods on different environments (clean and noisy)
+    5. Demonstration of traces
+    6. Comparison of LPM and RND on clean and noisy performance gap.
 
 4. Conclusion
 
@@ -55,16 +56,19 @@ Youssef's MiniGrid Repo: https://github.com/JosefGh/minigrid_intrinsic_reward
 - Diversify the MiniGrid metrics (coverage alone was shown to be a poor exploration metric in the maze). Report at least: final success rate, and **sample efficiency via a training-step vs. reward curve** (so a faster learner shows up as an earlier-rising curve even when final performance converges). Trace demonstrations as a qualitative complement. Track **extrinsic and intrinsic reward separately** (per-episode sums persisted to the monitor CSV) for the β analysis.
 - Utilize parallel computing via `run_grid.py --jobs`. Under PPO each run is one process (`DummyVecEnv`, 8 envs, ~1 core); it is compute-bound (no DQN replay-buffer random-sampling), so parallelise across runs (`--jobs ≈ number of cells`, up to the core count). (The DQN path was memory-bandwidth-bound — that is no longer the binding constraint under PPO.)
 
-## Locked experiment configuration (2026-06-17)
+## Locked experiment configuration (updated 2026-06-18)
 
-- **Learning method: PPO** everywhere (SB3 `MlpPolicy`, 8 vec-envs). DQN/UCB-DQN retired (dormant).
+Full running results + numbers: `expr_data/minigrid/FINDINGS.md`.
+
+- **Learning method: PPO** everywhere (SB3 `MlpPolicy`, 8 vec-envs via `SubprocVecEnv`). DQN/UCB-DQN retired (dormant).
 - **Observation: ImgObs** (147-dim 7×7×3 egocentric view), not FlatObs (whose 2835 dims were ~95% constant mission-string padding; same spatial representation, ~19× lighter).
-- **Environments — one (more interesting) per tier:**
+- **Environments — one per tier:**
   - easy: `MiniGrid-DoorKey-5x5` (subgoal shaping DISABLED → purely sparse)
   - medium: `MiniGrid-FourRooms`
-  - hard: `MiniGrid-KeyCorridorS3R3`
-- **Exploration methods compared:** `none` (PPO baseline), `count` (UCB-style count-based bonus = β/sqrt(N(obs)), the non-intrinsic classical comparator), `rnd`, `lpm`.
+  - hard: `MiniGrid-MultiRoom-N6` (replaced `KeyCorridorS3R3`, which is unsolvable by a feedforward MLP — it needs key-carry memory; all methods scored 0 at 3M).
+- **Exploration methods compared:** `none` (PPO baseline), `entropy` (PPO `ent_coef=0.01`, the non-intrinsic comparator), `rnd`, `lpm`. (`count` was implemented then dropped in favour of `entropy`.)
 - **Variants (2×2):** clean/noisy × baseline/intrinsic; noise = 10% per-element observation corruption (global, not localized noisy-TV).
-- **Budget:** 1M PPO steps/run (revisit for KeyCorridor if undertrained).
-- **Grid:** 3 envs × [2 baseline(`none`) + 2 intrinsic-variants × {count,rnd,lpm}] × 3 seeds = **72 runs**.
-- **β:** RND/LPM/count all use `reward_scale=0.05` for now; per-method β sweep is a later step.
+- **β (intrinsic reward_scale) — env-dependent:** β=0.05 drowns the sparse signal; usable ~0.001–0.005 on easy/medium; a *larger* β is needed on hard envs where intrinsic must drive exploration. Current config: RND 0.005, LPM 0.001 (LPM being re-swept on the hard env).
+- **Budget:** medium 1M, hard 2M+ steps/run.
+- **Execution:** the box has a ~18-min process reaper, so long runs use **chunked checkpoint-resume** training (`train_one --chunk-steps`, resume via `PPO.load`) driven by a shell meta-loop re-invoking `run_grid.py`; `run_grid` uses `ThreadPoolExecutor`. See `FINDINGS.md` for details.
+- **Headline result so far:** on hard `MultiRoom-N6`, RND solves it (eval 0.32, all seeds) while baseline + entropy never reach the goal (0.0) — intrinsic motivation pays off where naive exploration fails. FourRooms (medium): intrinsic does not beat baseline. (LPM-vs-RND fair comparison pending the β re-sweep.)
