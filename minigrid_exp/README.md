@@ -15,9 +15,13 @@ The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
 ## Analysis scripts
 
 Use `analyze.py` for all post-run analysis — it understands the run-name format
-`<env>__<variant>__<method>__seed_<n>[__beta<b>]`. The vendored `evaluate.py` and
-`plot_results.py` are stale: their filename parsers predate the `__<method>__`
-segment and will silently misparse or skip results; do not rely on them.
+`<env>__<variant>__<method>__seed_<n>[__beta<b>]` — and `make_report_figs.py` for the
+report figures. `make_trace.py` renders a trained policy's trajectory as a GIF.
+
+The originally-vendored `evaluate.py`, `plot_results.py` (stale: their filename parsers
+predated the `__<method>__` segment and silently misparsed results) and `record_agent.py`,
+`run_experiments.py` (superseded by `make_trace.py` and `run_grid.py`) were **removed**
+during the 2026-06-23 cleanup; recover them from git history if ever needed.
 
 ## Verified versions (smoke-tested 2026-06-17)
 

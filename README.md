@@ -39,9 +39,17 @@ ChallengingRL/
   **"LPM explores more" claim does not reproduce** — in this small, extrinsic-free maze a
   uniform-random policy covers the most, so coverage turns out to be decoupled from
   noise-robustness. This is what motivates the move to a sparse-reward setting (below). See below.
-- **Final experiment (designed, see `docs/SPEC.md`):** a sparse-reward **MiniGrid** study — a
-  β intrinsic-coefficient sweep and an LPM-vs-RND noise-robustness comparison, where intrinsic
-  motivation should actually help (unlike the coverage-saturated maze).
+- **Sparse-reward MiniGrid study** (`minigrid_exp/`): **exercised and complete.** PPO on the
+  7×7 symbolic view across a difficulty ladder (easy DoorKey-5x5, medium FourRooms, hard
+  MultiRoom-N6), clean and under observation noise, comparing none / entropy / RND / LPM. Key
+  results: (1) the intrinsic coefficient β is environment-dependent (usable ~0.001–0.005; 0.05
+  drowns the sparse reward); (2) intrinsic motivation is **difficulty-gated** — unneeded on
+  easy/medium, decisive on hard MultiRoom-N6 (RND solves it, baseline/entropy never reach the
+  goal); (3) under observation noise the trade-off **flips** — RND collapses while LPM stays
+  robust (cleanest on DoorKey-5x5: RND 0.87→0.03, LPM stays solved). Full write-up:
+  `latex_notes/2026-06-18-minigrid-intrinsic-exploration.{tex,pdf}`; data, figures and a running
+  `FINDINGS.md` under `expr_data/minigrid/`. Note: all three MiniGrid envs regenerate their layout
+  every episode, so reported eval returns average over the layout distribution.
 - **Atari (Ms Pac-Man)** exploration comparison: harness in `LPM_exploration/Atari/experiments/`;
   not yet exercised (no data produced).
 - **Montezuma** full-scale pipeline: not yet exercised; large runs need cluster/cloud GPU.
@@ -130,3 +138,31 @@ in `models.py`); the older raw-MSE form is still selectable in code via `reward_
 grid of top-down occupancy heatmaps showing how each method's exploration spreads (or stalls
 at the noise wall) over time. The experiment design is written up in
 `latex_notes/2026-05-31-maze-exploration-design.tex`.
+
+## Reproducing the sparse-reward MiniGrid study
+
+`minigrid_exp/` runs PPO (Stable-Baselines3) on the flattened 7×7 symbolic view, with a global
+observation-noise wrapper and RND / LPM intrinsic-reward wrappers (`config.ALGORITHM_NAME = "ppo"`;
+the dormant DQN/UCB classical baseline lives in `ucb_dqn.py`). All artifacts read/write under
+`<repo>/expr_data/minigrid/` (gitignored); runs are chunked checkpoint→resume so each chunk finishes
+under the box's ~18-min single-process limit.
+
+```bash
+# grid: methods x envs x seeds (chunked + resumable). The driver re-invokes itself per chunk.
+PYTHONPATH=minigrid_exp ./LPM_exploration/.venv/bin/python minigrid_exp/run_grid.py \
+  --envs MiniGrid-DoorKey-5x5-v0 MiniGrid-FourRooms-v0 MiniGrid-MultiRoom-N6-v0 \
+  --methods none entropy rnd lpm --seeds 1 2 3
+
+# aggregate -> final-success table (understands <env>__<variant>__<method>__seed_<n>[__np<p>])
+PYTHONPATH=minigrid_exp ./LPM_exploration/.venv/bin/python minigrid_exp/analyze.py
+
+# regenerate the report figures (difficulty ladder, beta sweep, noise) into latex_notes/figs_minigrid/
+PYTHONPATH=minigrid_exp ./LPM_exploration/.venv/bin/python minigrid_exp/make_report_figs.py
+
+# render a single trained policy's trajectory as a GIF
+PYTHONPATH=minigrid_exp ./LPM_exploration/.venv/bin/python minigrid_exp/make_trace.py \
+  MiniGrid-MultiRoom-N6-v0__intrinsic_no_noise__rnd__seed_1
+```
+
+Use `analyze.py` for all post-run analysis. The full write-up (research questions, tables, agent
+traces, slide mapping) is `latex_notes/2026-06-18-minigrid-intrinsic-exploration.tex`.
