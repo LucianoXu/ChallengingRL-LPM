@@ -34,6 +34,7 @@ from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
 from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
 from wrappers.count_wrapper import CountBasedExplorationWrapper
 from wrappers.reward_split_wrapper import EpisodeRewardSplitWrapper
+from method_utils import base_intrinsic
 
 
 MINIGRID_ACTION_NAMES = {
@@ -163,7 +164,8 @@ def make_env(
     # not the policy's reduced subset — intentional and in-range; do not assume
     # num_actions matches the agent's action_space.n.
     if training and intrinsic:
-        if method == "rnd":
+        base = base_intrinsic(method)
+        if base == "rnd":
             env = RNDIntrinsicRewardWrapper(
                 env,
                 reward_scale=RND_REWARD_SCALE if beta is None else beta,
@@ -176,7 +178,7 @@ def make_env(
                 device=RND_DEVICE,
                 seed=seed,
             )
-        elif method == "lpm":
+        elif base == "lpm":
             env = LPMIntrinsicRewardWrapper(
                 env,
                 reward_scale=LPM_REWARD_SCALE if beta is None else beta,
@@ -189,7 +191,7 @@ def make_env(
                 device=RND_DEVICE,
                 seed=seed,
             )
-        elif method == "count":
+        elif base == "count":
             env = CountBasedExplorationWrapper(
                 env,
                 reward_scale=COUNT_REWARD_SCALE if beta is None else beta,
