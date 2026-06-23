@@ -16,7 +16,28 @@ The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
 
 Use `analyze.py` for all post-run analysis — it understands the run-name format
 `<env>__<variant>__<method>__seed_<n>[__beta<b>]` — and `make_report_figs.py` for the
-report figures. `make_trace.py` renders a trained policy's trajectory as a GIF.
+report figures. `make_trace.py` renders a single trained policy's trajectory as a GIF.
+
+## Trajectory-GIF gallery (training-stage walkthroughs)
+
+A curated, two-panel GIF gallery showing how an agent's maze walk evolves across
+training stages, with the noise-induced observation anomalies made visible. See
+`docs/superpowers/specs/2026-06-23-minigrid-trajectory-gifs-design.md`.
+
+- `gif_config.py` — the 6 story-aligned configs (env × noise × method) and their
+  per-stage step budgets + fixed render layout. Single source of truth.
+- `make_stage_snapshots.py` — re-trains each config (one seed), dumping
+  untrained/mid/final checkpoints to `results/models/ppo_gif_snapshots/`.
+  `PYTHONPATH=. python make_stage_snapshots.py --jobs 6` (one subprocess/config).
+- `gif_gallery.py` — renders each stage as a two-panel GIF (left: top-down maze
+  with breadcrumb trail + shaded 7×7 FOV; right: the agent's egocentric view,
+  where noise-corrupted cells show the true cell ghosted under TV-static), plus a
+  3-stage contact strip. `PYTHONPATH=. python gif_gallery.py [--slug ...]`.
+  `--smoke <run_name>` validates the renderer against an on-disk study model.
+- `wrappers/ego_capture.py` — pass-through wrapper that records the exact
+  (possibly noisy) image the policy saw each step.
+- Output: `expr_data/minigrid/figures/gifs/<slug>/{untrained,mid,final,strip}.gif`
+  + a `README.md` index. Tests: `tests/test_gif_gallery.py`.
 
 The originally-vendored `evaluate.py`, `plot_results.py` (stale: their filename parsers
 predated the `__<method>__` segment and silently misparsed results) and `record_agent.py`,

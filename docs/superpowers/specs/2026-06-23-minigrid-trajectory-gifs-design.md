@@ -1,8 +1,46 @@
 # MiniGrid trajectory GIF gallery — design
 
 Date: 2026-06-23
-Status: design (awaiting user review → writing-plans)
+Status: implemented (with one deviation — see below)
 Scope: `minigrid_exp/` (the sparse-reward MiniGrid intrinsic-reward study)
+
+## Implementation note (2026-06-23 deviation)
+
+The plan below assumed **no intermediate checkpoints existed** and therefore
+called for re-training a curated subset with explicit snapshotting. That was
+inaccurate: the study's chunked driver kept (a) every config's **final** model
+(`results/models/ppo/<run>.zip`) and (b) per-chunk **best-eval** checkpoints
+(`results/models/ppo/best/<run>/c<step>/best_model.zip`) written by the
+`EvalCallback`. What was genuinely missing was only a per-step progression and a
+random/untrained baseline.
+
+So the stages are now **sourced from disk, no re-training**:
+- **untrained** — a freshly-instantiated (random) policy, saved on demand
+  (`gif_gallery._ensure_untrained`); instantiation, not training.
+- **mid** — the per-chunk best-eval checkpoint nearest each config's `mid_steps`
+  target (c0 excluded, as it is already competent).
+- **final** — the study's final model.
+
+`make_stage_snapshots.py` is retained as a tool for clean per-step re-training if
+ever wanted, but is not on the default path. Render seeds: the DoorKey trio
+shares seed 42; both MultiRoom configs use seed 64 (same layout — `none` fails at
+every stage while `rnd` only solves at the final stage, since RND's deterministic
+MultiRoom policy solves ~18% of layouts, the documented "unreliable deterministic
+policy").
+
+**Noise depiction (revised after review).** The original §3 plan ("true cell
+ghosted beneath TV-static") was inaccurate to the observation space and inflated
+the apparent noise: the wrapper corrupts each of the 7×7×3 `[object, color,
+state]` channel-elements independently at prob 0.10, so a *cell* shows a change
+~24% of the time (any of 3 channels) even though only ~9% of cells get a changed
+*object*. Rendering static-over-true hid the real failure mode. The egocentric
+panel now renders the agent's **actual noisy symbolic observation as MiniGrid
+sprites** (`render_ego`, sanitizing out-of-range codes so `Grid.decode` doesn't
+raise), so corrupted cells display the **hallucinated object** the agent
+perceives (phantom keys, doors, lava, goals). A thin **magenta outline**
+(`mark_corruption`) flags the object-hallucinated cells (~9%). This is faithful
+to what the policy receives and to the noisy-TV failure mode. Everything else
+below is as built.
 
 ## Goal
 
