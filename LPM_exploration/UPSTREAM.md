@@ -238,3 +238,12 @@ ours vs. what is upstream.
   untouched: it still uses `root='./data'` (CWD-relative), so a fresh Atari noisy-TV run would
   re-download rather than read `expr_data/datasets/cifar-10/`. `.gitignore` gained `/expr_data/`
   (the old per-dir artifact rules were kept as defensive backstops).
+
+- **2026-06-19 — `analyze.py` TV-fixation figure: per-seed dots overlay.** In
+  `Miniworld/experiments/analyze.py`, the `fig_tv_fixation.png` block now overlays the 64 per-seed
+  TV-action-share values as jittered black dots (a strip plot) on top of the mean±std bars, so the
+  full distribution behind each bar is visible (LPM = tight mass at ≈0; MSE/RND/ICM spread high with a
+  low-tail of lucky seeds; uniform = razor-tight line at 1/5). Cosmetic only — the per-seed `tv_share`
+  values and the `table_tv_fixation.csv` aggregation are unchanged; jitter is seeded
+  (`np.random.default_rng(0)`) for reproducibility. Mirrors the per-seed-dot treatment added to the
+  MiniGrid report figures (`minigrid_exp/make_report_figs.py`) for visual consistency across the deck.

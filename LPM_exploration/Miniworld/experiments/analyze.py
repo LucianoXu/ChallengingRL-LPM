@@ -106,13 +106,28 @@ def run(results_dir, positions_dir, figures_dir, n_windows=5):
         tv_rows.append({"method": r["method"],
                         "tv_share": float((a == 4).mean()) if len(a) else 0.0})
     if tv_rows:
-        tdf = pd.DataFrame(tv_rows).groupby("method")["tv_share"].agg(["mean", "std"])
+        tvdf = pd.DataFrame(tv_rows)
+        tdf = tvdf.groupby("method")["tv_share"].agg(["mean", "std"])
         tdf.to_csv(os.path.join(figures_dir, "table_tv_fixation.csv"))
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.bar(tdf.index, tdf["mean"], yerr=tdf["std"].fillna(0), capsize=4)
+        methods = list(tdf.index)
+        xpos = np.arange(len(methods))
+        fig, ax = plt.subplots(figsize=(6.5, 4))
+        ax.bar(xpos, tdf["mean"], yerr=tdf["std"].fillna(0), capsize=4,
+               color="#4c78a8", alpha=0.85, zorder=1)
+        # Overlay per-seed TV-share (64 seeds/method) as jittered dots, so the
+        # distribution behind the mean+/-std bar is visible (e.g. LPM is a tight
+        # mass near 0 with a few outliers, MSE is spread high).
+        rng = np.random.default_rng(0)
+        for k, mth in enumerate(methods):
+            vals = tvdf.loc[tvdf["method"] == mth, "tv_share"].to_numpy()
+            jit = (rng.random(len(vals)) - 0.5) * 0.5
+            ax.scatter(np.full(len(vals), k) + jit, vals, s=8, color="black",
+                       alpha=0.35, zorder=3, edgecolors="none")
+        ax.set_xticks(xpos); ax.set_xticklabels(methods)
         ax.axhline(0.2, color="gray", ls=":", label="uniform (1/5)")
         ax.set_ylabel("share of steps = action 4 (noisy TV)")
-        ax.set_title("Noisy-TV fixation under action_noise")
+        ax.set_title("Noisy-TV fixation under action_noise\n"
+                     "(bars = mean$\\pm$std over 64 seeds; dots = per-seed)", fontsize=10)
         ax.legend(fontsize=8)
         fig.tight_layout()
         fig.savefig(os.path.join(figures_dir, "fig_tv_fixation.png"), dpi=130); plt.close(fig)
