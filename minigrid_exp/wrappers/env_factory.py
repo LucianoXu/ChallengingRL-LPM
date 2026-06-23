@@ -143,7 +143,7 @@ def make_env(
         )
 
     if noise:
-        env = ObservationNoiseWrapper(env, noise_prob=noise_prob)
+        env = ObservationNoiseWrapper(env, noise_prob=noise_prob, seed=seed)
 
     if ALGORITHM_NAME == "ppo":
         use_flat_obs = PPO_USE_FLAT_OBS
