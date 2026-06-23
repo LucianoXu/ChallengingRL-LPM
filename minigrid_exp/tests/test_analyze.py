@@ -24,6 +24,18 @@ def test_parse_run_name_no_beta():
     assert p["beta"] is None and p["method"] == "none" and p["seed"] == 1
 
 
+def test_parse_run_name_recurrent_method():
+    p = analyze.parse_run_name(
+        "MiniGrid-DoorKey-5x5-v0__intrinsic_noise__rnd_lstm__seed_2__np0.1")
+    assert p["method"] == "rnd_lstm" and p["np"] == "0.1" and p["seed"] == 2
+
+
+def test_parse_run_name_recurrent_clean():
+    p = analyze.parse_run_name(
+        "MiniGrid-FourRooms-v0__intrinsic_no_noise__lpm_lstm__seed_1")
+    assert p["method"] == "lpm_lstm" and p["np"] is None
+
+
 def test_load_eval_npz(tmp_path):
     d = tmp_path / "eval" / "MiniGrid-Empty-8x8-v0__baseline_no_noise__none__seed_1"
     d.mkdir(parents=True)
