@@ -144,26 +144,37 @@ Final eval return vs `noise_prob` (per-element observation corruption probabilit
   So the finding is "LPM degrades LESS," not "LPM stays solved" — a relative-ordering flip near the
   failure floor. (The clean noisy-TV distractor demonstration is the earlier MiniWorld maze result.)
 
-### 7. DoorKey-5x5 (easy) — clean + noise (1M, 3 seeds)  ★ CLEANEST noise-robustness result
+### 7. DoorKey-5x5 (easy) — clean + noise  ★ CLEANEST noise-robustness result
+**(clean: 8 seeds — bumped 2026-06-19 to resolve LPM variance; noisy: 3 seeds, 1M each)**
 
-| method | clean | noisy np=0.1 |
+| method | clean (8 seeds) | noisy np=0.1 (3 seeds) |
 |---|---|---|
-| none | 0.93 | 0.95 |
-| entropy | 0.96 | 0.95 |
-| rnd | 0.82 | **0.035** |
-| lpm | 0.61 (±0.53, bimodal) | **0.95** |
+| none | 0.94 | 0.95 |
+| entropy | 0.91 | 0.95 |
+| rnd | 0.87 | **0.032** |
+| lpm | 0.67 (±0.41, **bimodal**) | **0.93** |
 
-- **Clean:** baseline best (~0.93-0.96); intrinsic unneeded — rnd slightly lower (0.82), lpm unreliable
-  (0.61, high variance). Confirms the easy/medium "intrinsic unneeded" regime (same as FourRooms).
-- **Noise = the clean noisy-TV reproduction in MiniGrid:** RND **collapses** (0.82 -> 0.035 — its
+- **★ 8-seed LPM-clean check (2026-06-19):** bumped DoorKey-clean 3→8 seeds to test whether more seeds
+  shrink LPM's wide band. **It does not — the variance is genuine bimodality, not small-sample noise.**
+  Per-seed final eval: seeds {1,2,4,6,7}=~0.965, {8}=0.867, **{3,5}=0.000** → 6/8 solve, 2/8 collapse;
+  mean 0.67, std 0.41. RND is rock-solid on the same task (8/8 ≈ 0.965, std 0.001). LPM either solves
+  (~0.96) or under-explores and never reaches the goal (0) — same signature as the MiniWorld unclipped
+  λ=1 LPM seed-collapse (faithful reward is noise-robust but unstable). **This is a property of LPM, not
+  a measurement defect.** Per-seed numbers reproducible via the eval npz under `results/logs/ppo/eval/`.
+- **NOTE — noisy 8-seed bump FAILED:** the seeds-4-8 *noisy* DoorKey cells all crashed with a
+  `SubprocVecEnv`+noise spawn error (exit 120; clean cells unaffected, `DummyVecEnv` runs fine). So the
+  noisy column above is still 3 seeds. Fix = route noise variants through `DummyVecEnv`; pending re-run.
+- **Clean:** baseline best (~0.91-0.94); intrinsic unneeded — rnd slightly lower (0.87), lpm unreliable
+  (0.67, bimodal). Confirms the easy/medium "intrinsic unneeded" regime (same as FourRooms).
+- **Noise = the clean noisy-TV reproduction in MiniGrid:** RND **collapses** (0.87 -> 0.032 — its
   novelty bonus is hijacked by the noisy observations, so it chases noise instead of the goal), while
-  **LPM is robust (0.61 -> 0.95, becomes as reliable as the baseline)** and the baseline is robust
+  **LPM is robust (0.67 -> 0.93, becomes as reliable as the baseline)** and the baseline is robust
   (none/entropy 0.95). Mechanism: under noise LPM's learning-progress signal -> ~0 (noise is
   unlearnable) so LPM effectively reverts to the plain policy and still solves; RND's prediction-error
   signal stays high on noise and derails it.
 - **Why cleaner than FourRooms:** DoorKey-5x5 is tiny, so 10% obs-noise does NOT stop none/entropy/lpm
   from solving (perception survives) — this **isolates the intrinsic-reward noise-vulnerability (RND)
-  from perception degradation**. Result is a dramatic rank flip: clean rnd>lpm, noisy lpm(0.95)>>rnd(0.035).
+  from perception degradation**. Result is a dramatic rank flip: clean rnd>lpm, noisy lpm(0.93)>>rnd(0.032).
 
 ### 8. MultiRoom-N6 (hard) — noisy (np 0.1, 0.2; 2M, 3 seeds)
 

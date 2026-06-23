@@ -11,10 +11,10 @@
 
 \newcommand{\note}[1]{\textcolor{gray}{\small\emph{#1}}}
 
-\title{\textbf{Intrinsic Motivation for Exploration in Sparse-Reward MiniGrid}\\
-\large Results and slide-organisation notes (response to \texttt{docs/SPEC.md})\\
+\title{\textbf{Intrinsic Motivation for Noise-Robust Exploration}\\
+\large From MiniWorld coverage to sparse-reward MiniGrid --- a full response to \texttt{docs/SPEC.md}\\
 \normalsize \emph{Challenging Problems in Reinforcement Learning} (SS~2026)\\
-\normalsize Topic: Exploration vs.\ Exploitation --- RND vs.\ LPM under PPO}
+\normalsize Topic: Exploration vs.\ Exploitation --- reproducing and extending Hou, An \& Du (2026), LPM}
 \author{Yingte (experiments/data), Youssef (analysis/report)}
 \date{2026-06-18}
 
@@ -22,38 +22,170 @@
 \maketitle
 
 \begin{abstract}
-\noindent After the MiniWorld 3D-maze reproduction showed that \emph{coverage} fails to separate
-exploration methods in an extrinsic-free maze, we move to \textbf{sparse-reward MiniGrid}, where a
-real task reward lets intrinsic motivation actually pay off. Under a common PPO agent (MLP on the
-$7\times7$ symbolic view) we compare a plain baseline (\textsc{none}), entropy-bonus exploration
-(\textsc{entropy}), Random Network Distillation (\textsc{rnd}) and the paper's Learning Progress
-Monitoring (\textsc{lpm}), across a three-rung difficulty ladder (easy DoorKey-5x5, medium FourRooms,
-hard MultiRoom-N6), clean and under observation noise, with $3$ seeds. Three headline results.
-\textbf{(1)} The intrinsic mixing coefficient $\beta$ matters enormously and is environment-dependent:
-$\beta{=}0.05$ \emph{drowns} the sparse reward (return $\to 0$); the usable range is $\sim$0.001--0.005.
-\textbf{(2)} Intrinsic motivation's benefit is \emph{difficulty-gated}: unnecessary on easy/medium
-(the PPO baseline already solves/explores them), but \textbf{decisive on hard MultiRoom-N6, where RND
-solves the task (eval return $0.32$) while the baseline and entropy never reach the goal ($0.0$)}.
-RND beats LPM on clean hard exploration: RND's always-positive novelty bonus drives directed
-exploration, whereas LPM's signed learning-progress signal nets $\approx 0$ per episode and
-under-explores. \textbf{(3)} That trade-off reverses under noise: on noisy DoorKey-5x5 \textbf{RND
-collapses ($0.82\to0.035$) while LPM stays robust ($\to0.95$)} --- a clean MiniGrid reproduction of
-the LPM paper's noise-robustness claim. We give the figures, tables and agent traces, and map each to
-the planned slide deck.
+\noindent These notes cover the project end to end --- both halves of \texttt{docs/SPEC.md}. \textbf{Part~I
+(SPEC~\S2, slide deck \S2) reproduces the LPM paper} on its own 3D \textbf{MiniWorld} maze: 6 methods
+$\times$ 3 noise variants $\times$ 64 seeds, A2C, the paper's $5\!\times\!10^4$-step budget, with a
+paper-faithful log-space LPM. The headline noisy-TV robustness claim \emph{reproduces} (under
+\texttt{action\_noise} the raw-pixel predictor MSE fixates on the noise wall $83\%$ of the time and its
+coverage collapses, while LPM almost never looks at it, $3\%$); but the paper's ``LPM achieves the
+highest coverage'' ranking does \emph{not} --- a \emph{uniform-random} control covers the most in all
+three variants. The lesson: \textbf{coverage is the wrong yardstick in an extrinsic-free maze}, which
+motivates Part~II. \textbf{Part~II (SPEC~\S3, slide deck \S3) is our extension to sparse-reward
+MiniGrid}, where a real task reward lets intrinsic motivation pay off and \emph{task success}
+discriminates exploration quality. Under a common PPO agent (MLP on the $7\times7$ symbolic view) we
+compare a plain baseline (\textsc{none}), entropy-bonus exploration (\textsc{entropy}), Random Network
+Distillation (\textsc{rnd}) and the paper's Learning Progress Monitoring (\textsc{lpm}) across a
+three-rung difficulty ladder (easy DoorKey-5x5, medium FourRooms, hard MultiRoom-N6), clean and under
+observation noise. Three results. \textbf{(1)} The intrinsic coefficient $\beta$ matters enormously and
+is environment-dependent: $\beta{=}0.05$ \emph{drowns} the sparse reward; the usable range is
+$\sim$0.001--0.005. \textbf{(2)} Intrinsic motivation is \emph{difficulty-gated}: unnecessary on
+easy/medium, but \textbf{decisive on hard MultiRoom-N6, where RND solves the task (eval $0.32$) while
+baseline/entropy never reach the goal}. \textbf{(3)} That trade-off reverses under noise: on noisy
+DoorKey-5x5 \textbf{RND collapses while LPM stays robust} --- a clean MiniGrid reproduction of the
+paper's noise-robustness claim in a second, symbolic-observation domain. Figures, tables and agent
+traces below are mapped to the planned slide deck.
 \end{abstract}
 
-\section{Setup}
-\textbf{Agent.} PPO (Stable-Baselines3), MLP policy, $8$ vectorised envs. Observation:
-\texttt{ImgObs} --- the agent's $7\times7\times3$ egocentric symbolic view, flattened to \textbf{147}
-dimensions. \note{We deliberately dropped the default \texttt{FlatObs} (2835-dim): $\sim$95\% of it is
-a constant one-hot of the (fixed) mission string, i.e.\ uninformative padding; \texttt{ImgObs} keeps
-the identical spatial information $\sim$19$\times$ lighter.}
+\part*{Part~I --- Reproducing the LPM paper on MiniWorld (slide deck \S2)}
+\addcontentsline{toc}{part}{Part I: MiniWorld reproduction}
+
+\section{MiniWorld environment and setup (slides 2.1--2.2)}\label{sec:mwsetup}
+\textbf{Environment.} The paper's exploration testbed is a hand-designed 3D \textbf{MiniWorld} maze
+(four rooms, $160\times120$ RGB first-person observations) with \emph{no extrinsic reward} --- the
+agent is scored purely by how much of the maze it visits. Two ``noisy-TV'' variants stress-test
+robustness: \texttt{noisy\_tv}, where one wall shows white noise (a green-pixel $\to$ random-RGB
+transform), and \texttt{action\_noise}, where a dedicated action (\#4) replaces the whole observation
+with a random CIFAR-10 image --- an unlearnable, perpetually ``novel'' distractor that a
+prediction-error bonus will chase forever. \texttt{nonoise} is the clean control.
+
+\textbf{Agent, methods, metrics.} A2C (the upstream pipeline), shared CNN encoder, $5\!\times\!10^4$
+exploration steps per run --- the paper's maze budget (Fig.~3 of Hou et al.). We compare \textbf{six}
+policies: \textsc{lpm} (paper-faithful log-space learning-progress reward
+$r^i=g_\phi-\log\mathrm{MSE}$), \textsc{rnd}, \textsc{icm}, \textsc{mse} (raw next-frame pixel error,
+the pure noisy-TV victim), \textsc{none} (A2C, no intrinsic reward), and a \emph{uniform-random}
+control ($a\sim\mathrm{Uniform}\{0\dots4\}$, no learning --- the ``does any of this beat chance?''
+baseline). Metrics: \textbf{coverage} (fraction of reachable cells visited), \textbf{TV-action share}
+(fraction of steps spent on the noise action under \texttt{action\_noise} --- the direct fixation
+measure), and \textbf{coverage-heatmap evolution} (per-cell occupancy over training).
+\note{We made LPM paper-faithful: log-space Eq.~3 instead of the released notebooks' raw-error clipped
+form, which silently masked a stability issue. Full design + numbers:
+\texttt{latex\_notes/2026-05-31-maze-exploration-design.pdf}; slides: \texttt{reports/report2/}.}
+
+\section{Result 1 --- noisy-TV robustness reproduces (slide 2.3)}
+\begin{figure}[h]\centering\includegraphics[width=0.7\textwidth]{mw_tv_fixation.png}
+\caption{TV-action share under \texttt{action\_noise} (bars = mean$\pm$std; black dots = the $64$
+per-seed values): fraction of steps spent staring at the noise wall. \textsc{mse} is trapped on it
+($0.83$); \textsc{lpm} essentially never is ($0.03$, below even the no-learning baseline); the
+curiosity baselines RND/ICM are partially fooled; \emph{uniform} sits at exactly $1/5$ (chance). The
+per-seed dots show the full distribution behind each bar --- LPM is a tight mass at $\approx0$, while
+MSE/RND/ICM spread high (each with a low-tail of lucky seeds), confirming the effect is not a
+mean-only artifact.}\label{fig:mwtv}\end{figure}
+
+\begin{table}[h]\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Policy} & \textbf{TV-action share} (\texttt{action\_noise})\\
+\midrule
+\textbf{LPM}  & $\mathbf{0.030 \pm 0.113}$\\
+uniform       & $0.200 \pm 0.003$\\
+\textsc{none} & $0.205 \pm 0.175$\\
+ICM           & $0.526 \pm 0.242$\\
+RND           & $0.666 \pm 0.276$\\
+\textbf{MSE}  & $\mathbf{0.830 \pm 0.266}$\\
+\bottomrule
+\end{tabular}
+\caption{Noisy-TV fixation, 64 seeds. LPM almost never stares at the noise wall (median $0.9\%$; only
+$1/64$ seeds ever fixates) because its dynamics model cannot \emph{improve} on the unlearnable image;
+MSE is trapped ($83\%$). \textbf{This is the paper's central claim, and it reproduces.}}\label{tab:mwtv}\end{table}
+
+The mechanism is exactly the paper's: a prediction-\emph{error} bonus (MSE) rewards the perpetually
+surprising noise wall and the agent fixates; LPM rewards model \emph{improvement}, which is $0$ on
+unlearnable noise, so LPM ignores the wall. RND and ICM, which also reduce to prediction-error signals,
+are partially fooled ($67\%$, $53\%$). \note{Slide 2.3.}
+
+\section{Result 2 --- but coverage does not separate methods (slides 2.4--2.5)}\label{sec:mwcov}
+\begin{figure}[h]\centering\includegraphics[width=0.95\textwidth]{mw_coverage_curves.png}
+\caption{Coverage vs.\ frames, per variant (mean$\pm$std, 64 seeds). The \emph{uniform-random} control
+(brown) covers the most in all three variants and with the lowest variance; every \emph{learned}
+policy --- LPM included --- falls below it. Bands are wide (between-seed std $0.08$--$0.32$): the
+single-env A2C is high-variance.}\label{fig:mwcov}\end{figure}
+
+\begin{table}[h]\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Policy} & \texttt{nonoise} & \texttt{noisy\_tv} & \texttt{action\_noise}\\
+\midrule
+\textbf{uniform} & $\mathbf{0.587\,(0.13)}$ & $\mathbf{0.710\,(0.08)}$ & $\mathbf{0.696\,(0.09)}$\\
+\textsc{none}    & $0.459\,(0.24)$ & $0.611\,(0.25)$ & $0.589\,(0.25)$\\
+LPM              & $0.332\,(0.25)$ & $0.452\,(0.27)$ & $0.299\,(0.32)$\\
+MSE              & $0.476\,(0.23)$ & $0.551\,(0.26)$ & $0.129\,(0.12)$\\
+ICM              & $0.542\,(0.20)$ & $0.536\,(0.29)$ & $0.410\,(0.19)$\\
+RND              & $0.468\,(0.22)$ & $0.519\,(0.29)$ & $0.290\,(0.22)$\\
+\bottomrule
+\end{tabular}
+\caption{Coverage fraction, mean (std), 64 seeds. Best per column in \textbf{bold}: the
+uniform-random control wins \emph{all three} variants. \textbf{The paper's ``LPM covers the most''
+ranking does not reproduce here.} LPM's coverage is further depressed by a bimodal seed collapse
+(policy instability of the unclipped $\lambda_i{=}1$ reward, \emph{not} TV-fixation --- the collapsed
+seeds freeze somewhere in the maze, not on the wall).}\label{tab:mwcov}\end{table}
+
+\begin{figure}[h]\centering\includegraphics[width=0.95\textwidth]{mw_heatmap_action_noise.png}
+\caption{Coverage-heatmap evolution under \texttt{action\_noise} (per-cell visit density, shared log
+scale, mean over 64 seeds; rows = method, columns = training windows). \textsc{mse}'s mass stays
+pinned at the noise wall (top strip) while the room empties; \emph{uniform} fills the rooms most
+evenly. Visual confirmation that fixation (Table~\ref{tab:mwtv}) and coverage (Table~\ref{tab:mwcov})
+are \emph{decoupled}.}\label{fig:mwheat}\end{figure}
+
+\paragraph{Conclusion: coverage is not a good exploration metric (slide 2.5).} In this small,
+extrinsic-free maze, coverage rewards undirected \emph{randomness} --- uniform thrashing spreads
+through the rooms while any \emph{learned} policy commits to a narrower, repetitive walk, so training
+\emph{reduces} coverage. Noise-avoidance and coverage are decoupled (under \texttt{action\_noise}
+uniform wastes $20\%$ of steps frozen on the wall yet still covers most; LPM never touches the wall yet
+covers less on average). \textbf{So what \emph{is} a good metric for exploration?} Our answer, and the
+pivot of the project: move to a setting with a real, sparse \emph{task} reward, and measure
+\emph{success at the task}. That is Part~II. \note{Slide 2.5 --- the bridge to the MiniGrid work.}
+
+\part*{Part~II --- Intrinsic motivation in sparse-reward MiniGrid (slide deck \S3)}
+\addcontentsline{toc}{part}{Part II: MiniGrid extension}
+
+\section{Setup}\label{sec:mgsetup}
+\textbf{Observation space.} A MiniGrid step returns a dictionary
+$\{\texttt{image}, \texttt{direction}, \texttt{mission}\}$. The \texttt{image} is the agent's
+\emph{egocentric, partially-observable} $7\times7$ view of the cells \emph{in front of it} (not the
+full grid), with \textbf{3 channels} per cell encoding $(\text{object id},\ \text{colour id},\
+\text{state})$ in MiniGrid's compact \emph{symbolic} scheme --- e.g.\ object$\in\{$wall, door, key,
+goal, $\dots\}$, state$\in\{$open, closed, locked$\}$ for doors. These are \emph{not} RGB pixels. We
+wrap with \texttt{ImgObs} (keep only the image) and flatten to a \textbf{147-dim}
+($=7\!\times\!7\!\times\!3$) vector. \note{This answers ``why were the observations 2835-dim?'': the
+default \texttt{FlatObs} \emph{appends} a one-hot encoding of the mission string to the image, and that
+mission is fixed per task --- so $\sim$95\% of \texttt{FlatObs} is a constant, uninformative padding.
+\texttt{ImgObs} carries the identical spatial information $\sim$19$\times$ lighter; we use it
+throughout.}
+
+\textbf{Action space.} MiniGrid's native action space is $\mathrm{Discrete}(7)$:
+$\{0\!:\!\text{turn left},\ 1\!:\!\text{turn right},\ 2\!:\!\text{move forward},\ 3\!:\!\text{pickup},\
+4\!:\!\text{drop},\ 5\!:\!\text{toggle/open},\ 6\!:\!\text{done}\}$. We restrict it to the minimal
+useful subset \emph{per environment} (a \texttt{MiniGridActionSubsetWrapper}), which removes dead
+actions and shrinks the exploration branching factor: \textbf{FourRooms} (pure navigation) uses
+$\{$left, right, forward$\}$ (\textbf{3} actions); \textbf{DoorKey} and \textbf{MultiRoom-N6} (must
+grab a key / open doors) use $\{$left, right, forward, pickup, toggle$\}$ (\textbf{5} actions); the
+never-needed \texttt{drop} and \texttt{done} are dropped.
+
+\textbf{Model and PPO hyperparameters.} PPO (Stable-Baselines3), \texttt{MlpPolicy} (the SB3 default:
+separate actor and critic MLPs, two hidden layers of $64$ with $\tanh$), $\mathbf{8}$ parallel envs.
+Rollout $\texttt{n\_steps}{=}512$ per env ($\Rightarrow$ a $8\!\times\!512{=}4096$-transition buffer
+per update), $\texttt{batch\_size}{=}64$, $\texttt{n\_epochs}{=}10$, $\texttt{learning\_rate}{=}2.5\mathrm{e}{-}4$,
+$\gamma{=}0.99$, GAE $\lambda{=}0.95$, $\texttt{clip\_range}{=}0.2$, $\texttt{ent\_coef}{=}0$ (the
+\textsc{entropy} arm overrides this to $0.01$). Deterministic evaluation every $5\mathrm{k}$ steps over
+$10$ episodes (each a freshly randomized layout; see \emph{Procedural layout randomization} below) on a
+clean-of-intrinsic copy of the env. The intrinsic reward enters the \emph{training}
+return as $r = r^{\text{ext}} + \beta\,r^{i}_{\text{norm}}$; eval return is the pure sparse task reward.
 
 \textbf{Exploration methods.} (i) \textsc{none}: plain PPO, $\mathrm{ent\_coef}{=}0$. (ii)
 \textsc{entropy}: PPO with $\mathrm{ent\_coef}{=}0.01$ --- the \emph{non-intrinsic} (policy-stochasticity)
 comparator. (iii) \textsc{rnd}: bonus $=\lVert f_\theta(s)-\hat f(s)\rVert^2$ (predictor vs.\ fixed
 random target). (iv) \textsc{lpm}: paper-faithful log-space reward $r^i=g_\phi-\log\mathrm{MSE}$, gated
-until the error buffer fills. Intrinsic reward enters as $r = r^{\text{ext}} + \beta\,r^{i}_{\text{norm}}$.
+until the error buffer fills.
 
 \textbf{Environments (difficulty ladder, one per tier).} easy \texttt{DoorKey-5x5} (subgoal shaping
 disabled $\to$ purely sparse), medium \texttt{FourRooms}, hard \texttt{MultiRoom-N6}.
@@ -62,11 +194,31 @@ key, remember it, open a door), which a feed-forward MLP on the image-only view 
 all methods scored $0$ even at 3M steps. MultiRoom-N6 is memory-free (doors just toggle) so it is
 MLP-solvable, but exploration-hard.}
 
+\textbf{Procedural layout randomization (every episode).} All three environments
+\emph{regenerate their layout on every reset} --- during training \emph{and} during evaluation; the
+random seed only fixes the RNG stream, not a single fixed maze. The tiers differ in \emph{how much}
+they vary. \texttt{DoorKey-5x5} is only mildly random: the structure is fixed (agent in the left
+room, one door in the dividing wall, key in the left room, and the \textbf{goal pinned in the far
+corner}), with just the key/door/spawn cells jittering by a step or two. \texttt{FourRooms} places
+\textbf{both the spawn and the goal uniformly at random} across the four rooms, so a single episode can
+be trivial (same room, a few cells apart) or demand crossing all four. \texttt{MultiRoom-N6} draws a
+fresh $6$-room chain each episode (random room sizes, placements and door positions) with the goal in
+the final room --- always far from the spawn. Consequently \textbf{every reported eval return is an
+average over this layout distribution}, not a single-maze score: this is the representative way to
+measure generalisation, and it is why FourRooms' mean sits low (it averages a wide spread of easy and
+hard goal placements). \note{A fixed-seed render therefore shows only \emph{one} draw from this
+distribution: the agent-trace film-strips (\S\ref{sec:traces}) are single representative episodes,
+chosen for clarity rather than as summaries of the layout distribution. The caveat bites hardest for
+FourRooms, where a fixed seed can land a trivial same-room layout; DoorKey/MultiRoom are safer because
+their goal is \emph{structurally} far from the spawn (fixed far corner / end of the room chain).}
+
 \textbf{Metrics, seeds, budget.} Final deterministic eval return (the sparse task reward; the eval
 env carries no intrinsic bonus), the per-episode extrinsic/intrinsic split, and sample-efficiency
-curves. $3$ seeds, mean$\pm$std. Budgets: easy/medium 1M, hard 2M PPO steps.
+curves. Mean$\pm$std over seeds: \textbf{8 seeds on DoorKey-5x5} (bumped up to resolve LPM's high
+variance there; see \S\ref{sec:rq4}), \textbf{3 seeds} elsewhere. Budgets: easy/medium 1M, hard 2M
+PPO steps.
 
-\section{$\beta$: how to mix extrinsic and intrinsic reward (RQ2)}
+\section{$\beta$: how to mix extrinsic and intrinsic reward (RQ2)}\label{sec:beta}
 \begin{figure}[h]\centering\includegraphics[width=0.72\textwidth]{fig2_beta_sweep.png}
 \caption{$\beta$ sweep on FourRooms (500k). RND rises to a sweet spot ($\beta\!\approx\!0.001$--$0.005$,
 matching the baseline) then collapses to $0$ at $\beta{=}0.05$; LPM declines monotonically.}
@@ -81,23 +233,28 @@ settles into a reliable deterministic policy (eval $\approx 0$). \textbf{Takeawa
 environment-dependent --- small when intrinsic reward is a nuisance, larger when it is essential, with
 a sweet spot in between. \note{Slide 3.3.}
 
-\section{Does intrinsic reward beat the baseline? (RQ3)}
-\begin{figure}[h]\centering\includegraphics[width=0.78\textwidth]{fig1_difficulty_ladder.png}
-\caption{Difficulty ladder, clean, final eval return. Easy/medium: the baseline already
-solves/explores; intrinsic is unneeded (and slightly hurts). Hard MultiRoom-N6: only RND reaches the
-goal.}\label{fig:ladder}\end{figure}
+\section{Does intrinsic reward beat the baseline? (RQ3)}\label{sec:rq3}
+\begin{figure}[h]\centering\includegraphics[width=0.92\textwidth]{fig1_difficulty_ladder.png}
+\caption{Difficulty ladder, clean, final eval return (bars = mean$\pm$std; black dots = the per-seed
+finals, $8$ on DoorKey, $3$ elsewhere --- same windowed definition as the bars). Easy/medium: the
+baseline already solves/explores; intrinsic is unneeded (and slightly hurts). Hard MultiRoom-N6: only
+RND reaches the goal (its $3$ dots sit at $\approx0.32$ while every other method's dots lie on the
+floor at $0$). The dots also expose that LPM-clean DoorKey's wide bar is a $0$/$0.96$ \emph{bimodal
+split}, not a uniform spread.}\label{fig:ladder}\end{figure}
 
 \begin{table}[h]\centering
 \begin{tabular}{lcccc}
 \toprule
 env (clean) & \textsc{none} & \textsc{entropy} & \textsc{rnd} & \textsc{lpm} \\
 \midrule
-DoorKey-5x5 (easy)   & 0.93 & 0.96 & 0.82 & 0.61 \\
+DoorKey-5x5 (easy)   & 0.94 & 0.91 & 0.87 & 0.67$^\dagger$ \\
 FourRooms (medium)   & 0.34 & 0.30 & 0.30 & 0.25 \\
 MultiRoom-N6 (hard)  & 0.00 & 0.00 & \textbf{0.32} & 0.00 \\
 \bottomrule
 \end{tabular}
-\caption{Final eval return (mean, 3 seeds). \textbf{Intrinsic motivation is difficulty-gated.}}
+\caption{Final eval return (mean). \textbf{Intrinsic motivation is difficulty-gated.} DoorKey-5x5
+over \textbf{8 seeds}, the rest over 3. $^\dagger$LPM-clean DoorKey is \emph{bimodal} (6/8 seeds solve
+$\approx0.96$, 2/8 collapse to $0$; mean $0.67$, std $0.41$) --- see \S\ref{sec:rq4}.}
 \label{tab:ladder}\end{table}
 
 Intrinsic motivation's benefit appears \emph{only} when exploration is genuinely hard. On easy and
@@ -114,28 +271,33 @@ $\beta$ rescues it. This is LPM's designed trade-off: its learning-progress sign
 for unpredictable noise (its robustness virtue, next section) \emph{and} for already-learned local
 dynamics (so it under-explores clean hard tasks).
 
-\section{Noise robustness: LPM vs.\ RND (RQ4)}
+\section{Noise robustness: LPM vs.\ RND (RQ4)}\label{sec:rq4}
 \begin{figure}[h]\centering
 \includegraphics[width=0.49\textwidth]{fig3_doorkey_noise.png}\hfill
 \includegraphics[width=0.49\textwidth]{fig4_fourrooms_noise.png}
-\caption{\textbf{Left:} DoorKey-5x5 clean vs.\ 10\% observation noise --- RND collapses
-($0.82\to0.035$), LPM stays robust ($0.61\to0.95$, like the baseline). \textbf{Right:} FourRooms
-degradation vs.\ noise probability --- RND falls off the most, LPM the least.}\label{fig:noise}\end{figure}
+\caption{\textbf{Left:} DoorKey-5x5 clean vs.\ 10\% observation noise (bars = mean$\pm$std; black
+dots = the per-seed final returns). RND collapses ($0.87\to0.03$). LPM-\emph{clean} is \emph{bimodal}
+--- $6/8$ seeds solve ($\approx0.96$), $2/8$ collapse to $0$ --- so its mean $0.67$ and wide $\pm$std
+bar reflect a two-mode split, \emph{not} measurement noise (no seed actually lands near the mean); yet
+under noise LPM stays robust ($\to0.93$). \textbf{Right:} FourRooms degradation vs.\ noise probability
+--- RND falls off the most, LPM the least.}\label{fig:noise}\end{figure}
 
 \begin{table}[h]\centering
 \begin{tabular}{lcc}
 \toprule
 DoorKey-5x5 & clean & noisy (10\%)\\
 \midrule
-\textsc{none} & 0.93 & 0.95\\
-\textsc{entropy} & 0.96 & 0.95\\
-\textsc{rnd} & 0.82 & \textbf{0.035}\\
-\textsc{lpm} & 0.61 & \textbf{0.95}\\
+\textsc{none} & 0.94 & 0.95\\
+\textsc{entropy} & 0.91 & 0.95\\
+\textsc{rnd} & 0.87 & \textbf{0.032}\\
+\textsc{lpm} & 0.67$^\dagger$ & \textbf{0.93}\\
 \bottomrule
 \end{tabular}
-\caption{The cleanest noise-robustness result. DoorKey-5x5 is small enough that 10\% noise does not
-stop \textsc{none}/\textsc{entropy}/\textsc{lpm} from solving --- which \emph{isolates} the
-intrinsic-reward noise-vulnerability: only RND is destroyed.}\label{tab:doorkeynoise}\end{table}
+\caption{The cleanest noise-robustness result (clean: \textbf{8 seeds}; noisy: 3 seeds). DoorKey-5x5
+is small enough that 10\% noise does not stop \textsc{none}/\textsc{entropy}/\textsc{lpm} from solving
+--- which \emph{isolates} the intrinsic-reward noise-vulnerability: only RND is destroyed
+($0.87\!\to\!0.03$). $^\dagger$LPM-clean is bimodal (6/8 solve $\approx0.96$, 2/8 collapse; mean
+$0.67$, std $0.41$); its noisy value uses 3 seeds, none of which collapsed.}\label{tab:doorkeynoise}\end{table}
 
 Observation noise makes every state look ``novel,'' so RND's prediction-error bonus stays high and the
 agent chases noise instead of the goal; LPM's learning-progress signal stays near $0$ on unlearnable
@@ -146,7 +308,20 @@ least, Fig.~\ref{fig:noise} right) but the global noise also degrades the policy
 methods fall to $\approx 0.05$ --- ``LPM degrades less,'' not ``LPM stays solved.'' On hard
 MultiRoom-N6, noise breaks perception for everyone (RND's clean $0.32 \to 0$). \note{Slides 3.4/3.6.}
 
-\section{Agent traces (slide 3.5)}
+\paragraph{LPM-clean variance is bimodality, not sampling noise (8-seed check).} The one place LPM's
+$3$-seed band looked alarmingly wide was \emph{clean} DoorKey-5x5. We bumped it to \textbf{8 seeds} to
+check whether more data would tighten it. It does not: the per-seed final returns are
+$\{0.97,0.96,0.97,0.97,0.97,0.87\}$ for six seeds and $\{0.00,0.00\}$ for two, i.e.\ LPM \emph{either}
+solves the task ($\approx0.96$) \emph{or} under-explores and never reaches the goal ($0$), with no
+middle ground (mean $0.67$, std $0.41$). Adding seeds sharpened this picture rather than shrinking the
+std --- the variance is \emph{intrinsic bimodality}, not small-sample uncertainty. This is the same
+signature as the MiniWorld result (Part~I): the faithful, unclipped $\lambda_i{=}1$ LPM reward is
+noise-robust but prone to a per-seed policy collapse. RND, by contrast, is rock-solid on the same task
+($8/8$ seeds at $\approx0.965$, std $0.001$) --- its always-positive bonus gives a stable exploration
+drive, where LPM's net-zero signal can leave a seed stuck. \note{Reporting this honestly is the point;
+the wide band is a property of LPM, not a measurement defect.}
+
+\section{Agent traces (slide 3.5)}\label{sec:traces}
 Animated GIFs live in \texttt{expr\_data/minigrid/figures/traces/}; representative film-strips below.
 \begin{figure}[h]\centering
 \includegraphics[width=0.9\textwidth]{strip_multiroom_rnd_solves.png}\\[2pt]
@@ -172,7 +347,7 @@ Only when exploration is hard: \textbf{yes, decisively, on MultiRoom-N6 (RND $0.
 easy/medium where the baseline suffices (Fig.~\ref{fig:ladder}). RND $>$ LPM on clean hard exploration.
 \item[\textbf{RQ4}] \emph{Does LPM generalise to other noise (beyond the MiniWorld noisy-TV)?}
 Yes --- \textbf{LPM is noise-robust and RND noise-vulnerable}, cleanest on DoorKey-5x5
-(RND $0.82\!\to\!0.035$, LPM $\to\!0.95$; Table~\ref{tab:doorkeynoise}). This reproduces the paper's
+(RND $0.87\!\to\!0.03$, LPM $0.67\!\to\!0.93$; Table~\ref{tab:doorkeynoise}). This reproduces the paper's
 claim in a second, symbolic-observation domain.
 \end{enumerate}
 
@@ -180,22 +355,36 @@ claim in a second, symbolic-observation domain.
 ability (RND) at the price of noise-fragility; LPM trades exploration aggressiveness for
 noise-robustness} --- and $\beta$ must be tuned or it drowns the task.
 
-\section*{Slide-deck mapping (SPEC \S3 ``Intrinsic Reward and LPM'')}
+\section*{Slide-deck mapping (full SPEC)}
+\textbf{Deck \S2 --- Reproducing the LPM paper (Part~I).}
 \begin{itemize}[leftmargin=2em,itemsep=1pt]
-\item 3.1 Environments / 3.2 Model \& setup $\to$ \S1.
-\item 3.3 $\beta$ sweep $\to$ \S2, Fig.~\ref{fig:beta}.
-\item 3.4 Success rate across envs (clean and noisy) $\to$ \S3--\S4, Fig.~\ref{fig:ladder},
-Table~\ref{tab:ladder}, Fig.~\ref{fig:noise}.
-\item 3.5 Trace demonstrations $\to$ \S5, Fig.~\ref{fig:traces}.
-\item 3.6 LPM vs.\ RND, clean and noisy performance gap $\to$ \S3 (clean: RND$>$LPM) + \S4
-(noisy: LPM$>$RND) --- the rank flip is the punchline.
+\item 2.1 MiniWorld env / 2.2 model, setup \& metrics $\to$ \S\ref{sec:mwsetup}.
+\item 2.3 TV-action share $\to$ Fig.~\ref{fig:mwtv}, Table~\ref{tab:mwtv}.
+\item 2.4 coverage curve + 2.4 coverage heatmap (larger variance, LPM not best) $\to$
+Figs.~\ref{fig:mwcov}, \ref{fig:mwheat}, Table~\ref{tab:mwcov}.
+\item 2.5 conclusion ``coverage is not a good metric'' $\to$ end of \S\ref{sec:mwcov} (the bridge to Part~II).
 \end{itemize}
+\textbf{Deck \S3 --- Intrinsic reward and LPM (Part~II).}
+\begin{itemize}[leftmargin=2em,itemsep=1pt]
+\item 3.1 environments / 3.2 model \& setup $\to$ \S\ref{sec:mgsetup}.
+\item 3.3 $\beta$ sweep $\to$ \S\ref{sec:beta}, Fig.~\ref{fig:beta}.
+\item 3.4 success rate across envs (clean and noisy) $\to$ \S\ref{sec:rq3}--\S\ref{sec:rq4},
+Fig.~\ref{fig:ladder}, Table~\ref{tab:ladder}, Fig.~\ref{fig:noise}.
+\item 3.5 trace demonstrations $\to$ \S\ref{sec:traces}, Fig.~\ref{fig:traces}.
+\item 3.6 LPM vs.\ RND, clean and noisy gap $\to$ \S\ref{sec:rq3} (clean: RND$>$LPM) +
+\S\ref{sec:rq4} (noisy: LPM$>$RND) --- the rank flip is the punchline.
+\end{itemize}
+\textbf{Deck \S4 --- Conclusion} $\to$ the four-RQ summary above and the one-line story.
 
 \appendix
 \section{Reproducibility \& data}
-Code: \texttt{minigrid\_exp/} (vendored + extended from Youssef's
-\texttt{minigrid\_intrinsic\_reward}). Raw data, tables, figures and trace GIFs:
-\texttt{expr\_data/minigrid/} with a running log in \texttt{FINDINGS.md}.
+\textbf{Part~I (MiniWorld).} Code: \texttt{LPM\_exploration/Miniworld/experiments/} (vendored from the
+authors' release, with the log-space LPM fix logged in \texttt{LPM\_exploration/UPSTREAM.md}); raw
+position logs, figures and tables in \texttt{expr\_data/miniworld/}; full design + per-cell numbers in
+\texttt{latex\_notes/2026-05-31-maze-exploration-design.pdf} and slides in
+\texttt{reports/report2/}. \textbf{Part~II (MiniGrid).} Code: \texttt{minigrid\_exp/} (vendored +
+extended from Youssef's \texttt{minigrid\_intrinsic\_reward}). Raw data, tables, figures and trace
+GIFs: \texttt{expr\_data/minigrid/} with a running log in \texttt{FINDINGS.md}.
 \textbf{Compute note:} the 128-core box SIGKILLs any single process after $\sim$18~min, so long runs
 use chunked checkpoint--resume training (\texttt{train\_one --chunk-steps}, resume via
 \texttt{PPO.load}) driven by a meta-loop re-invoking \texttt{run\_grid.py} (\texttt{ThreadPoolExecutor});
@@ -204,5 +393,8 @@ each chunk finishes under the limit and the idle driver survives. Grids:
 \textbf{Caveats:} (a) the MiniGrid noise is \emph{global} per-element corruption, not a localised
 noisy-TV distractor; a localised variant would be a cleaner analogue. (b) LPM under-explores clean
 hard tasks here, so the clean LPM-vs-RND gap is RND-favourable; the noise result is the LPM-favourable
-half. (c) 3 seeds --- DoorKey-clean LPM is bimodal (high variance).
+half. (c) Seeds: DoorKey-5x5 at 8 seeds (clean) confirms LPM-clean's wide band is \emph{genuine
+bimodality} ($6/8$ solve, $2/8$ collapse), not small-sample noise; the noisy DoorKey cells and all
+other envs are at 3 seeds (the noisy 8-seed bump hit a \texttt{SubprocVecEnv}+noise spawn crash and
+is pending a \texttt{DummyVecEnv} re-run).
 \end{document}
