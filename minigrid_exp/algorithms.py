@@ -1,6 +1,7 @@
 from stable_baselines3 import DQN, PPO
 
 from config import ALGORITHM_NAME, DQN_EXPLORATION_STRATEGY
+from method_utils import is_recurrent
 from ucb_dqn import UCBDQN
 
 
@@ -14,8 +15,11 @@ def get_dqn_class():
     )
 
 
-def get_algorithm_class():
+def get_algorithm_class(method: str = "none"):
     if ALGORITHM_NAME == "ppo":
+        if is_recurrent(method):
+            from sb3_contrib import RecurrentPPO
+            return RecurrentPPO
         return PPO
     if ALGORITHM_NAME == "dqn":
         return get_dqn_class()

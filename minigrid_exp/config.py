@@ -112,6 +112,18 @@ PPO_EVAL_FREQ = 5_000
 PPO_EVAL_EPISODES = 10
 PPO_POLICY_KWARGS = {}
 
+# Recurrent (LSTM) policy for the rnd_lstm / lpm_lstm arms (sb3-contrib
+# RecurrentPPO). shared_lstm=True + enable_critic_lstm=False: one LSTM feeds
+# actor+critic (~halves recurrent compute vs a separate critic LSTM). hidden=128
+# (obs is 147-dim; 256 is overkill).
+PPO_LSTM_POLICY = "MlpLstmPolicy"
+PPO_LSTM_POLICY_KWARGS = {
+    "lstm_hidden_size": 128,
+    "n_lstm_layers": 1,
+    "shared_lstm": True,
+    "enable_critic_lstm": False,
+}
+
 PPO_HYPERPARAMS = {
     "learning_rate": 2.5e-4,
     "n_steps": 512,

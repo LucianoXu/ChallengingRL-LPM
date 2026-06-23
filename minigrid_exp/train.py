@@ -23,18 +23,23 @@ from config import (
     PPO_EVAL_FREQ,
     PPO_HYPERPARAMS,
     PPO_N_ENVS,
+    PPO_LSTM_POLICY,
+    PPO_LSTM_POLICY_KWARGS,
     PPO_POLICY,
     PPO_POLICY_KWARGS,
 )
+from method_utils import is_recurrent
 from wrappers.env_factory import make_env
 
 
-def get_algorithm_config():
+def get_algorithm_config(method: str = "none"):
     if ALGORITHM_NAME == "ppo":
+        recurrent = is_recurrent(method)
         return {
-            "class": get_algorithm_class(),
-            "policy": PPO_POLICY,
-            "policy_kwargs": dict(PPO_POLICY_KWARGS),
+            "class": get_algorithm_class(method),
+            "policy": PPO_LSTM_POLICY if recurrent else PPO_POLICY,
+            "policy_kwargs": dict(
+                PPO_LSTM_POLICY_KWARGS if recurrent else PPO_POLICY_KWARGS),
             "hyperparams": dict(PPO_HYPERPARAMS),
             "eval_freq": max(PPO_EVAL_FREQ // PPO_N_ENVS, 1),
             "eval_episodes": PPO_EVAL_EPISODES,
@@ -147,7 +152,7 @@ def train_agent(
         ckpt_path = model_dir / f"{run_name}.zip"
         return ckpt_path
 
-    algorithm_config = get_algorithm_config()
+    algorithm_config = get_algorithm_config(method)
     if ALGORITHM_NAME == "ppo" and method == "entropy":
         algorithm_config["hyperparams"] = {
             **algorithm_config["hyperparams"], "ent_coef": ENTROPY_COEF,
