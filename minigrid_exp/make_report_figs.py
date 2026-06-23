@@ -179,7 +179,7 @@ def fig_memory_ablation():
     envs = [("MiniGrid-DoorKey-5x5-v0", "DoorKey-5x5"),
             ("MiniGrid-FourRooms-v0", "FourRooms"),
             ("MiniGrid-MultiRoom-N6-v0", "MultiRoom-N6")]
-    bars = ["rnd", "rnd_lstm", "lpm", "lpm_lstm"]
+    bars = ["rnd", "rnd_lstm", "lpm", "lpm_lstm"]  # intrinsic-only; none/entropy excluded by design (MLP-vs-LSTM ablation)
     panels = [("clean", "intrinsic_no_noise", np.nan),
               ("noisy 10%", "intrinsic_noise", 0.1)]
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.3), sharey=True)

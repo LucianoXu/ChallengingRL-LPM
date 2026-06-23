@@ -11,7 +11,7 @@ class ObservationNoiseWrapper(gym.ObservationWrapper):
     fraction of cells perturbed, NOT a per-channel/per-element probability. A
     corrupted cell is re-drawn as a unit: each of its 3 channels (object, color,
     state) gets an independent uniform draw within that channel's valid MiniGrid
-    range (object in [0,10], color in [0,5], state in [0,2]), so the noise never
+    range (currently object in [0,10], color in [0,5], state in [0,2]), so the noise never
     injects encodings the agent could not otherwise see.
 
     Owns a seeded numpy Generator for reproducibility. `last_cell_mask` exposes

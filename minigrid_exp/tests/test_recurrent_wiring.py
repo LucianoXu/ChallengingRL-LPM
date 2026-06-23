@@ -20,3 +20,4 @@ def test_recurrent_method_uses_recurrent_ppo():
     assert cfg["policy_kwargs"]["shared_lstm"] is True
     assert cfg["policy_kwargs"]["enable_critic_lstm"] is False
     assert cfg["policy_kwargs"]["lstm_hidden_size"] == 128
+    assert cfg["policy_kwargs"]["n_lstm_layers"] == 1
