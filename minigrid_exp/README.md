@@ -8,6 +8,10 @@ additions: a paper-faithful LPM wrapper (`wrappers/lpm_wrapper.py`), explicit
 analysis writing to `expr_data/minigrid/`. See `docs/minigrid_setup_analysis.md`
 and `docs/SPEC.md`.
 
+**Observation noise** (`wrappers/noise_wrapper.py`): `noise_prob` is the fraction of
+*cells* corrupted (per-cell Bernoulli); each corrupted cell is re-drawn per-channel
+within MiniGrid's valid ranges (object<=10, color<=5, state<=2).
+
 **Active learning method: PPO** (`config.ALGORITHM_NAME = "ppo"`). The project uses
 PPO everywhere — on-policy, so no DQN replay-buffer / random-sampling memory pressure.
 The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
@@ -17,6 +21,9 @@ The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
 Use `analyze.py` for all post-run analysis — it understands the run-name format
 `<env>__<variant>__<method>__seed_<n>[__beta<b>]` — and `make_report_figs.py` for the
 report figures. `make_trace.py` renders a single trained policy's trajectory as a GIF.
+Methods include the recurrent-policy arms `rnd_lstm` / `lpm_lstm` (RND/LPM intrinsic
+reward trained with an `sb3-contrib` `RecurrentPPO` `MlpLstmPolicy`); a `_lstm` suffix
+selects the LSTM policy, the base method selects the intrinsic wrapper.
 
 ## Trajectory-GIF gallery (training-stage walkthroughs)
 
@@ -47,4 +54,5 @@ during the 2026-06-23 cleanup; recover them from git history if ever needed.
 ## Verified versions (smoke-tested 2026-06-17)
 
 - `stable-baselines3==2.9.0` (gymnasium-1.x compatible)
+- `sb3-contrib==2.9.0` (RecurrentPPO LSTM policy; matches sb3)
 - `minigrid==3.1.0`

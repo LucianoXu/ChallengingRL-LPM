@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import imageio.v2 as imageio
 
 import config
+from method_utils import is_intrinsic
 
 FIGDIR = os.path.join(str(config.EXPR_DATA), "figures")
 OUT = os.path.join(FIGDIR, "report")
@@ -49,9 +50,11 @@ def per_seed_finals(env, variant, method, npv=np.nan, frac=0.1):
     return vals
 
 METHODS = ["none", "entropy", "rnd", "lpm"]
-COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c", "lpm": "#d62728"}
+COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c", "lpm": "#d62728",
+          "rnd_lstm": "#98df8a", "lpm_lstm": "#ff9896"}
 # Display labels: uppercase acronyms so "rnd" isn't misread as "md" at small sizes.
-LBL = {"none": "none", "entropy": "entropy", "rnd": "RND", "lpm": "LPM"}
+LBL = {"none": "none", "entropy": "entropy", "rnd": "RND", "lpm": "LPM",
+       "rnd_lstm": "RND+LSTM", "lpm_lstm": "LPM+LSTM"}
 
 
 def cell(env, variant, method, beta=np.nan, npv=np.nan):
@@ -69,7 +72,7 @@ def fig_ladder():
     fig, ax = plt.subplots(figsize=(8, 4.3))
     x = np.arange(len(envs)); w = 0.2
     for i, m in enumerate(METHODS):
-        var = "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise"
+        var = "intrinsic_no_noise" if is_intrinsic(m) else "baseline_no_noise"
         means, stds = [], []
         for env, _ in envs:
             mu, sd = cell(env, var, m)
@@ -119,8 +122,8 @@ def fig_beta():
 # --- Fig 3: DoorKey clean vs noisy (the clean RQ4 demo) ---
 def fig_doorkey_noise():
     env = "MiniGrid-DoorKey-5x5-v0"
-    cvar = lambda m: "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise"
-    nvar = lambda m: "intrinsic_noise" if m in ("rnd", "lpm") else "baseline_noise"
+    cvar = lambda m: "intrinsic_no_noise" if is_intrinsic(m) else "baseline_no_noise"
+    nvar = lambda m: "intrinsic_noise" if is_intrinsic(m) else "baseline_noise"
     fig, ax = plt.subplots(figsize=(7.5, 4.3))
     x = np.arange(len(METHODS)); w = 0.38
     clean = [cell(env, cvar(m), m) for m in METHODS]
@@ -160,13 +163,39 @@ def fig_fourrooms_noise():
     env = "MiniGrid-FourRooms-v0"; nps = [0.0, 0.1, 0.2, 0.3]
     fig, ax = plt.subplots(figsize=(7, 4))
     for m in ["none", "rnd", "lpm"]:
-        var = "intrinsic_noise" if m in ("rnd", "lpm") else "baseline_noise"
+        var = "intrinsic_noise" if is_intrinsic(m) else "baseline_noise"
         ys = [cell(env, var, m, npv=p)[0] for p in nps]
         ax.plot(nps, ys, "o-", color=COLORS[m], label=LBL[m])
     ax.set_xlabel("observation-noise probability"); ax.set_ylabel("final eval return")
     ax.set_title("FourRooms: RND degrades most under noise; LPM least")
     ax.legend(fontsize=9); ax.set_ylim(0, 0.4)
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig4_fourrooms_noise.png"), dpi=140)
+    plt.close(fig)
+
+
+# --- Fig 5: memory ablation — MLP vs LSTM policy for RND and LPM ---
+def fig_memory_ablation():
+    """Per env, MLP vs LSTM policy for RND and LPM, clean and noisy@0.1."""
+    envs = [("MiniGrid-DoorKey-5x5-v0", "DoorKey-5x5"),
+            ("MiniGrid-FourRooms-v0", "FourRooms"),
+            ("MiniGrid-MultiRoom-N6-v0", "MultiRoom-N6")]
+    bars = ["rnd", "rnd_lstm", "lpm", "lpm_lstm"]
+    panels = [("clean", "intrinsic_no_noise", np.nan),
+              ("noisy 10%", "intrinsic_noise", 0.1)]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.3), sharey=True)
+    for ax, (cond, var, npv) in zip(axes, panels):
+        x = np.arange(len(envs)); w = 0.2
+        for i, m in enumerate(bars):
+            means = [cell(env, var, m, npv=npv)[0] for env, _ in envs]
+            stds = [cell(env, var, m, npv=npv)[1] for env, _ in envs]
+            ax.bar(x + (i - 1.5) * w, means, w, yerr=stds, capsize=2,
+                   label=LBL[m], color=COLORS[m], alpha=0.85)
+        ax.set_xticks(x); ax.set_xticklabels([e[1] for e in envs], fontsize=8)
+        ax.set_title(cond); ax.set_ylim(0, 1.18)
+        ax.legend(fontsize=7, ncol=2)
+    axes[0].set_ylabel("final eval return")
+    fig.suptitle("Memory ablation: MLP vs LSTM policy (RND, LPM)")
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig5_memory_ablation.png"), dpi=140)
     plt.close(fig)
 
 
@@ -184,6 +213,7 @@ def filmstrip(gif_name, out_name, n=4):
 
 if __name__ == "__main__":
     fig_ladder(); fig_beta(); fig_doorkey_noise(); fig_fourrooms_noise()
+    fig_memory_ablation()
     filmstrip("MiniGrid-MultiRoom-N6-v0__intrinsic_no_noise__rnd__seed_1.gif",
               "strip_multiroom_rnd_solves.png")
     filmstrip("MiniGrid-MultiRoom-N6-v0__baseline_no_noise__none__seed_1.gif",
