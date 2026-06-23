@@ -64,9 +64,10 @@ uint8 symbolic encoding. Channels are (0) object id, (1) color id, (2) state id.
 ### Default value (decision (c))
 
 `noise_prob` default stays **0.10**, but now means "10% of cells" (≈ 5 of 49),
-which is materially milder than the old ~27%-of-cells-touched. Still swept via
-`run_grid.py --noise-probs`; the existing report sweep points {0.0, 0.1, 0.2, 0.3}
-remain meaningful under the new definition.
+which is materially milder than the old ~27%-of-cells-touched. The `--noise-probs`
+**sweep is deferred** this round — only the single level `0.1` is run (see the
+experiment matrix). The degradation-curve sweep {0.1, 0.2, 0.3} (report Fig 4) is
+a later round.
 
 ### Efficiency
 
@@ -188,11 +189,39 @@ maintains the LSTM hidden state across an eval episode.
 - `tests/`: noise-wrapper unit test (above) + a build/smoke test that
   `rnd_lstm`/`lpm_lstm` construct a `RecurrentPPO` and step a few times.
 
+## Experiment matrix (this round)
+
+Axes:
+- **Environments (3):** `MiniGrid-DoorKey-5x5`, `MiniGrid-FourRooms`,
+  `MiniGrid-MultiRoom-N6`.
+- **Methods (6):** `none`, `entropy`, `rnd`, `lpm`, `rnd_lstm`, `lpm_lstm`.
+- **Variants:** the existing 2×2 — {baseline, intrinsic} × {clean, noisy} — at the
+  **single noise level `noise_prob = 0.1`** (baseline = none/entropy, intrinsic =
+  rnd/lpm/rnd_lstm/lpm_lstm). The `noise_prob` sweep is deferred.
+- **Seeds (match existing per-env convention so the memory ablation is same-seed
+  fair):** DoorKey-5x5 = **8** (seeds 1–8); FourRooms, MultiRoom-N6 = **3**.
+- **Step budget:** per the existing per-env budgets (`run_grid --steps`): DoorKey
+  cheap, medium ≈ 1M, hard ≈ 2M+.
+
+What actually runs (clean `none`/`entropy`/`rnd`/`lpm` already exist and stay
+valid; the old noise model is stale so every noisy cell is regenerated):
+
+| Block | Methods | Seed-instances/env (DoorKey 8, others 3) | Runs |
+|---|---|---|---|
+| clean — new arms only | rnd_lstm, lpm_lstm | 8 + 3 + 3 = 14 each | 2 × 14 = **28** |
+| noisy@0.1 — all methods | none, entropy, rnd, lpm, rnd_lstm, lpm_lstm | 14 each | 6 × 14 = **84** |
+
+Total ≈ **112 new runs**, of which 56 are recurrent (≈ 2–3× wall-clock) and 56 are
+MLP (the regenerated old-4 noisy cells). The two core comparisons:
+**noise-robustness** (LPM vs RND at 0.1, new noise model) and **memory gain**
+(rnd↔rnd_lstm, lpm↔lpm_lstm, clean and noisy).
+
 ## Data implications
 
-- Clean `none`/`entropy`/`rnd`/`lpm` runs: still valid.
-- All `*_noise` runs: invalidated by the noise change → regenerate.
-- `rnd_lstm`/`lpm_lstm`: new runs across variants (clean and noisy).
+- Clean `none`/`entropy`/`rnd`/`lpm` runs: still valid (not re-run).
+- All `*_noise` runs for the existing 4 methods: invalidated by the noise change →
+  regenerate at `noise_prob = 0.1`.
+- `rnd_lstm`/`lpm_lstm`: new runs, clean and noisy@0.1.
 
 ## Rollout (de-risk before the full grid)
 
@@ -201,8 +230,9 @@ maintains the LSTM hidden state across an eval episode.
 3. Smoke-test the recurrent path on DoorKey-5x5 clean at ~50k steps: confirm
    `RecurrentPPO` + intrinsic wrapper + `EvalCallback` compose and that
    `evaluate_policy` threads the LSTM state; measure fps to size the grid.
-4. Regenerate the noise grid (old noise stale) and run the new recurrent arms,
-   via `run_grid.py` chunked checkpoint-resume.
+4. Run the experiment matrix above via `run_grid.py` chunked checkpoint-resume:
+   the new recurrent arms clean, and all 6 methods at noisy@0.1 (regenerating the
+   stale old-4 noisy cells). DoorKey at 8 seeds, others at 3.
 5. Re-run `analyze.py` + `make_report_figs.py`; add the memory-ablation figure;
    update `expr_data/minigrid/FINDINGS.md` and the LaTeX write-up.
 
