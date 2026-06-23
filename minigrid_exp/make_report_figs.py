@@ -2,6 +2,7 @@
 
 Writes to expr_data/minigrid/figures/report/. Run: PYTHONPATH=. python make_report_figs.py
 """
+import glob
 import os
 import numpy as np
 import pandas as pd
@@ -16,6 +17,36 @@ FIGDIR = os.path.join(str(config.EXPR_DATA), "figures")
 OUT = os.path.join(FIGDIR, "report")
 os.makedirs(OUT, exist_ok=True)
 TAB = pd.read_csv(os.path.join(FIGDIR, "table_final_success.csv"))
+LOGS_EVAL = os.path.join(str(config.EXPR_DATA), "results", "logs", "ppo", "eval")
+
+
+def per_seed_finals(env, variant, method, npv=np.nan, frac=0.1):
+    """Per-seed final eval return, using the SAME definition as analyze.py's bar
+    means: the mean over the last `frac` (10%) of the seed's eval curve
+    (chunks concatenated, sorted by global timestep). Using the same definition
+    for the dots and the bars keeps them consistent (otherwise a single-last-point
+    dot can sit above a windowed-mean bar even with no collapse)."""
+    base = f"{env}__{variant}__{method}__seed_".replace("/", "_")
+    vals = []
+    for d in sorted(glob.glob(os.path.join(LOGS_EVAL, base + "*"))):
+        run = os.path.basename(d)
+        if pd.isna(npv):
+            if "__np" in run:            # clean: reject noise runs
+                continue
+        elif not run.endswith(f"__np{npv:g}"):
+            continue
+        pts = []
+        for p in (sorted(glob.glob(os.path.join(d, "*", "evaluations.npz")))
+                  + glob.glob(os.path.join(d, "evaluations.npz"))):
+            z = np.load(p)
+            pts.extend((int(t), float(np.mean(r))) for t, r in zip(z["timesteps"], z["results"]))
+        if not pts:
+            continue
+        pts.sort(key=lambda tr: tr[0])
+        returns = [r for _, r in pts]
+        k = max(1, int(frac * len(returns)))
+        vals.append(float(np.mean(returns[-k:])))
+    return vals
 
 METHODS = ["none", "entropy", "rnd", "lpm"]
 COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c", "lpm": "#d62728"}
@@ -35,21 +66,32 @@ def fig_ladder():
     envs = [("MiniGrid-DoorKey-5x5-v0", "easy\nDoorKey-5x5"),
             ("MiniGrid-FourRooms-v0", "medium\nFourRooms"),
             ("MiniGrid-MultiRoom-N6-v0", "hard\nMultiRoom-N6")]
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=(8, 4.3))
     x = np.arange(len(envs)); w = 0.2
     for i, m in enumerate(METHODS):
+        var = "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise"
         means, stds = [], []
         for env, _ in envs:
-            var = "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise"
             mu, sd = cell(env, var, m)
             means.append(mu); stds.append(sd)
-        ax.bar(x + (i - 1.5) * w, means, w, yerr=stds, capsize=2,
-               label=LBL[m], color=COLORS[m])
+        xpos = x + (i - 1.5) * w
+        ax.bar(xpos, means, w, yerr=stds, capsize=2, label=LBL[m],
+               color=COLORS[m], alpha=0.85, zorder=1)
+        # Overlay per-seed final returns (same windowed definition as the bars).
+        for j, (env, _) in enumerate(envs):
+            vals = per_seed_finals(env, var, m)
+            if not vals:
+                continue
+            jit = np.linspace(-1, 1, len(vals)) * w * 0.3 if len(vals) > 1 else np.array([0.0])
+            ax.scatter(np.full(len(vals), xpos[j]) + jit, vals, s=13, color="black",
+                       zorder=3, edgecolors="white", linewidths=0.4)
     ax.set_xticks(x); ax.set_xticklabels([e[1] for e in envs])
-    ax.set_ylabel("final eval return (3 seeds)")
-    ax.set_title("Difficulty ladder (clean): intrinsic motivation is difficulty-gated")
+    ax.set_ylabel("final eval return")
+    ax.set_title("Difficulty ladder (clean): intrinsic motivation is difficulty-gated\n"
+                 "(bars = mean$\\pm$std; dots = per-seed finals; DoorKey 8 seeds, others 3)",
+                 fontsize=10)
     ax.legend(ncol=4, fontsize=8, loc="upper right")
-    ax.set_ylim(0, 1.05)
+    ax.set_ylim(0, 1.18)
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig1_difficulty_ladder.png"), dpi=140)
     plt.close(fig)
 
@@ -77,20 +119,38 @@ def fig_beta():
 # --- Fig 3: DoorKey clean vs noisy (the clean RQ4 demo) ---
 def fig_doorkey_noise():
     env = "MiniGrid-DoorKey-5x5-v0"
-    fig, ax = plt.subplots(figsize=(7, 4))
+    cvar = lambda m: "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise"
+    nvar = lambda m: "intrinsic_noise" if m in ("rnd", "lpm") else "baseline_noise"
+    fig, ax = plt.subplots(figsize=(7.5, 4.3))
     x = np.arange(len(METHODS)); w = 0.38
-    clean = [cell(env, "intrinsic_no_noise" if m in ("rnd", "lpm") else "baseline_no_noise", m)
-             for m in METHODS]
-    noisy = [cell(env, "intrinsic_noise" if m in ("rnd", "lpm") else "baseline_noise", m, npv=0.1)
-             for m in METHODS]
+    clean = [cell(env, cvar(m), m) for m in METHODS]
+    noisy = [cell(env, nvar(m), m, npv=0.1) for m in METHODS]
     ax.bar(x - w / 2, [c[0] for c in clean], w, yerr=[c[1] for c in clean], capsize=3,
-           label="clean", color="#4c78a8")
+           label="clean (mean$\\pm$std)", color="#4c78a8", alpha=0.85, zorder=1)
     ax.bar(x + w / 2, [c[0] for c in noisy], w, yerr=[c[1] for c in noisy], capsize=3,
-           label="noisy (10%)", color="#e45756")
+           label="noisy 10% (mean$\\pm$std)", color="#e45756", alpha=0.85, zorder=1)
+    # Overlay per-seed final returns so bimodality (the LPM-clean 0/0.96 split) is visible.
+    for i, m in enumerate(METHODS):
+        for xc, vals in [(x[i] - w / 2, per_seed_finals(env, cvar(m), m)),
+                         (x[i] + w / 2, per_seed_finals(env, nvar(m), m, npv=0.1))]:
+            if not vals:
+                continue
+            jit = np.linspace(-1, 1, len(vals)) * w * 0.28 if len(vals) > 1 else np.array([0.0])
+            ax.scatter(np.full(len(vals), xc) + jit, vals, s=20, color="black",
+                       zorder=3, edgecolors="white", linewidths=0.5)
+    # Annotate the LPM-clean solve rate (the point of the whole figure).
+    li = METHODS.index("lpm")
+    cv = per_seed_finals(env, cvar("lpm"), "lpm")
+    n_solve = sum(v > 0.5 for v in cv)
+    ax.annotate(f"{n_solve}/{len(cv)} seeds solve;\n{len(cv) - n_solve}/{len(cv)} collapse to 0",
+                xy=(x[li] - w / 2, 0.55), fontsize=8, ha="center", va="center",
+                bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.6", alpha=0.9), zorder=4)
     ax.set_xticks(x); ax.set_xticklabels([LBL[m] for m in METHODS])
-    ax.set_ylabel("final eval return"); ax.set_ylim(0, 1.05)
-    ax.set_title("DoorKey-5x5: under noise, RND collapses while LPM stays robust")
-    ax.legend(fontsize=9)
+    ax.set_ylabel("final eval return"); ax.set_ylim(0, 1.18)
+    ax.set_title("DoorKey-5x5: under noise, RND collapses while LPM stays robust\n"
+                 "(dots = per-seed finals; LPM-clean is bimodal, not just high-variance)",
+                 fontsize=10)
+    ax.legend(fontsize=8, loc="center left")
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig3_doorkey_noise.png"), dpi=140)
     plt.close(fig)
 
