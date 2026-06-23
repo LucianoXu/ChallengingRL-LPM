@@ -1,8 +1,7 @@
 """Render a trained policy's trajectory as a GIF.
 
-Handles the `<env>__<variant>__<method>__seed_<n>[__tag]` run-name scheme
-(the vendored record_agent.py predates the `__<method>__` segment). The
-chunked checkpoint is `MODELS_DIR/<run_name>.zip`.
+Handles the `<env>__<variant>__<method>__seed_<n>[__tag]` run-name scheme.
+The chunked checkpoint is `MODELS_DIR/<run_name>.zip`.
 
 Usage:
   PYTHONPATH=. python make_trace.py <run_name> [<run_name> ...]
