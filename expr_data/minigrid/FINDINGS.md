@@ -212,3 +212,65 @@ methods, beta sweep, and trace GIFs (`figures/traces/`) are all done. Tables in
 Optional extensions (not required by SPEC): a *localized* noisy-TV MiniGrid variant (cleaner distractor
 than the current global obs-noise); a RecurrentPPO/LSTM agent to make KeyCorridor (memory task) solvable.
 Ready to hand off to analysis / report.
+
+
+---
+
+## 2026-06-23 — Noise model corrected + noisy@0.1 regenerated (MLP arms)
+
+**What changed.** The observation-noise wrapper was rewritten (`wrappers/noise_wrapper.py`).
+Old model: each of the 147 elements of the 7x7x3 symbolic view was flipped independently at
+probability `noise_prob`, replaced by `randint(0,10)` — so `noise_prob` was a per-*element*
+rate (at 0.10, ~27% of cells were touched: 1 - 0.9^3), and the replacement was out of range for
+the color channel (valid 0-5) and state channel (valid 0-2). New model: `noise_prob` is the
+per-*cell* Bernoulli probability (the fraction of the 49 cells corrupted), and a corrupted cell
+is re-drawn as a unit with each channel sampled within its valid MiniGrid range (object [0,10],
+color [0,5], state [0,2]). So "10% noise" now means "10% of cells", and the noise never injects
+encodings the agent could not otherwise see.
+
+**Consequence.** All earlier `*_noise` runs (and the §7 / takeaway-6 numbers above, e.g. the old
+"RND 0.82 -> 0.035") were produced under the old per-element model and are **superseded** by the
+table below. Clean (no-noise) runs are unaffected. The `noise_prob` sweep is deferred — only
+`np=0.1` was regenerated this round. The recurrent-policy arms (`rnd_lstm`/`lpm_lstm`) are
+implemented and merged but their runs were deferred (CPU LSTM ~10x slower than MLP), so
+`figures/report/fig5_memory_ablation.png` currently has empty LSTM bars.
+
+**Final eval return, clean -> noisy@0.1 (new noise model; DoorKey 8 seeds, others 3; mean, std):**
+
+| env | method | clean | noisy@0.1 |
+|---|---|---|---|
+| DoorKey-5x5 | none    | 0.941 (.02) | 0.961 (.001) |
+| DoorKey-5x5 | entropy | 0.914 (.04) | 0.961 (.001) |
+| DoorKey-5x5 | lpm     | 0.669 (.42, bimodal) | 0.961 (.001) |
+| DoorKey-5x5 | rnd     | 0.866 (.09) | **0.516 (.40)** |
+| FourRooms   | none    | 0.338 (.07) | 0.103 (.010) |
+| FourRooms   | entropy | 0.304 (.05) | 0.093 (.011) |
+| FourRooms   | lpm     | 0.246 (.07) | 0.093 (.025) |
+| FourRooms   | rnd     | 0.303 (.10) | **0.033 (.010)** |
+| MultiRoom-N6| none    | 0.0 | 0.0 |
+| MultiRoom-N6| entropy | 0.0 | 0.0 |
+| MultiRoom-N6| lpm     | 0.0 | 0.0 |
+| MultiRoom-N6| rnd     | 0.316 (.02) | 0.0 |
+
+**Takeaways (RQ4 holds under the corrected noise model).**
+
+1. **DoorKey-5x5 — RND noise-vulnerable, LPM noise-robust (the clean demo).** Under 10%-of-cells
+   noise, `none`/`entropy`/`lpm` all hold at ~0.96 (LPM = baseline), while **RND drops to
+   0.52 +/- 0.40** — high variance / bimodal (some seeds collapse, some survive). The ordering
+   reproduces the prior result; the collapse is *less catastrophic* than the old model (0.52 vs
+   old 0.035) because the corrected noise is milder and in-range, but RND is still the only method
+   hurt by noise. (Aside: LPM-clean is bimodal at 0.67 — some seeds collapse to 0 — yet LPM-noisy
+   solved on all 8 seeds; not over-interpreted, a seed-count artifact at this scale.)
+2. **FourRooms — same ordering, all degrade.** Noise lowers every method; RND degrades most
+   (0.303 -> 0.033, ~9x), LPM (0.246 -> 0.093) tracks the baseline (0.338 -> 0.103). Global noise
+   also degrades perception, so absolute returns are low.
+3. **MultiRoom-N6 — noise breaks everyone.** Clean, RND solves (0.316) while baseline/entropy/LPM
+   never reach the goal (0.0); under global noise all methods, including RND, collapse to 0.0.
+
+Net: prediction-error novelty (RND) gets distracted by stochastic-but-unlearnable observation
+noise; LPM's learning-progress signal ignores it and stays at baseline. The corrected, better-
+calibrated noise model makes this cleaner to read on DoorKey-5x5 and leaves the qualitative
+conclusion unchanged.
+
+**Pending (deferred this round):** `rnd_lstm`/`lpm_lstm` memory arms (clean + noisy) for the
+memory-vs-MLP ablation; the `noise_prob` sweep (0.2/0.3) for the FourRooms degradation curve.
