@@ -41,8 +41,11 @@ is environment-dependent: $\beta{=}0.05$ \emph{drowns} the sparse reward; the us
 $\sim$0.001--0.005. \textbf{(2)} Intrinsic motivation is \emph{difficulty-gated}: unnecessary on
 easy/medium, but \textbf{decisive on hard MultiRoom-N6, where RND solves the task (eval $0.32$) while
 baseline/entropy never reach the goal}. \textbf{(3)} That trade-off reverses under noise: on noisy
-DoorKey-5x5 \textbf{RND collapses while LPM stays robust} --- a clean MiniGrid reproduction of the
-paper's noise-robustness claim in a second, symbolic-observation domain. Figures, tables and agent
+DoorKey-5x5 \textbf{RND becomes unstable while LPM and the baseline stay robust}, and a fine FourRooms
+noise sweep ($0$--$0.1$) confirms the separation is \textbf{RND-vs-the-rest}: only RND degrades steeply,
+while \textsc{none}/\textsc{entropy}/LPM stay tied. So LPM reproduces the paper's \emph{noise-robustness}
+(it avoids RND's noise-chasing collapse) but, in this extrinsic-reward domain, is noise-\emph{neutral}
+--- it does not beat a plain baseline that is already robust. Figures, tables and agent
 traces below are mapped to the planned slide deck.
 \end{abstract}
 
@@ -212,6 +215,17 @@ chosen for clarity rather than as summaries of the layout distribution. The cave
 FourRooms, where a fixed seed can land a trivial same-room layout; DoorKey/MultiRoom are safer because
 their goal is \emph{structurally} far from the spawn (fixed far corner / end of the room chain).}
 
+\textbf{Observation noise.} The noisy variants corrupt the symbolic image with a wrapper whose
+\texttt{noise\_prob} is the per-\emph{cell} corruption probability: each of the $7\!\times\!7{=}49$ cells
+of the egocentric view is independently corrupted with probability \texttt{noise\_prob} (so ``10\%
+noise'' means $\approx5$ of the $49$ cells), and a corrupted cell is re-drawn as a unit with each of its
+three channels resampled \emph{within its valid range} (object $\in[0,10]$, colour $\in[0,5]$, state
+$\in[0,2]$, read from MiniGrid's constants). This is a \emph{global} distractor (any cell can be hit),
+not a localised noisy-TV wall, and it never injects encodings the agent could not otherwise see.
+\note{Corrected from an earlier per-\emph{element} model that flipped each of the $147$ channel-values
+independently and replaced them with out-of-range values --- that made ``10\%'' touch $\approx27\%$ of
+cells, so the noisy numbers below supersede earlier drafts.}
+
 \textbf{Metrics, seeds, budget.} Final deterministic eval return (the sparse task reward; the eval
 env carries no intrinsic bonus), the per-episode extrinsic/intrinsic split, and sample-efficiency
 curves. Mean$\pm$std over seeds: \textbf{8 seeds on DoorKey-5x5} (bumped up to resolve LPM's high
@@ -273,40 +287,65 @@ dynamics (so it under-explores clean hard tasks).
 
 \section{Noise robustness: LPM vs.\ RND (RQ4)}\label{sec:rq4}
 \begin{figure}[h]\centering
-\includegraphics[width=0.49\textwidth]{fig3_doorkey_noise.png}\hfill
+\includegraphics[width=0.49\textwidth]{fig6_fourrooms_bars.png}\hfill
 \includegraphics[width=0.49\textwidth]{fig4_fourrooms_noise.png}
-\caption{\textbf{Left:} DoorKey-5x5 clean vs.\ 10\% observation noise (bars = mean$\pm$std; black
-dots = the per-seed final returns). RND collapses ($0.87\to0.03$). LPM-\emph{clean} is \emph{bimodal}
---- $6/8$ seeds solve ($\approx0.96$), $2/8$ collapse to $0$ --- so its mean $0.67$ and wide $\pm$std
-bar reflect a two-mode split, \emph{not} measurement noise (no seed actually lands near the mean); yet
-under noise LPM stays robust ($\to0.93$). \textbf{Right:} FourRooms degradation vs.\ noise probability
---- RND falls off the most, LPM the least.}\label{fig:noise}\end{figure}
+\caption{\textbf{FourRooms noise robustness} (both panels recomputed on FourRooms; the DoorKey-5x5
+numbers are in Table~\ref{tab:doorkeynoise}). \textbf{Left:} clean vs.\ 10\% noise per method (bars =
+mean$\pm$std; dots = per-seed finals, 3 seeds) --- every method loses ground, and
+\textsc{none}/\textsc{entropy}/\textsc{lpm} land together ($\approx0.09$--$0.10$) while RND falls lowest
+($0.03$). \textbf{Right:} the full sweep \texttt{noise\_prob} $0$--$0.1$ in steps of $0.01$ (bands
+$\pm$std): \textbf{only RND separates} --- it degrades fastest and pulls below the pack from
+$\approx0.04$ on ($0.07\!\to\!0.03$) --- while \textsc{none}/\textsc{entropy}/\textsc{lpm} stay
+clustered and statistically tied. LPM \emph{tracks} the baseline (slightly \emph{below} at low noise,
+its clean under-exploration deficit); it does not beat it.}\label{fig:noise}\end{figure}
 
 \begin{table}[h]\centering
 \begin{tabular}{lcc}
 \toprule
 DoorKey-5x5 & clean & noisy (10\%)\\
 \midrule
-\textsc{none} & 0.94 & 0.95\\
-\textsc{entropy} & 0.91 & 0.95\\
-\textsc{rnd} & 0.87 & \textbf{0.032}\\
-\textsc{lpm} & 0.67$^\dagger$ & \textbf{0.93}\\
+\textsc{none} & 0.94 & 0.96\\
+\textsc{entropy} & 0.91 & 0.96\\
+\textsc{rnd} & 0.87 & \textbf{0.52}$^\ddagger$\\
+\textsc{lpm} & 0.67$^\dagger$ & \textbf{0.96}\\
 \bottomrule
 \end{tabular}
-\caption{The cleanest noise-robustness result (clean: \textbf{8 seeds}; noisy: 3 seeds). DoorKey-5x5
-is small enough that 10\% noise does not stop \textsc{none}/\textsc{entropy}/\textsc{lpm} from solving
---- which \emph{isolates} the intrinsic-reward noise-vulnerability: only RND is destroyed
-($0.87\!\to\!0.03$). $^\dagger$LPM-clean is bimodal (6/8 solve $\approx0.96$, 2/8 collapse; mean
-$0.67$, std $0.41$); its noisy value uses 3 seeds, none of which collapsed.}\label{tab:doorkeynoise}\end{table}
+\caption{The cleanest noise-robustness result (\textbf{8 seeds}, clean \emph{and} noisy, under the
+corrected cell-level noise model). DoorKey-5x5 is small enough that 10\% noise does not stop
+\textsc{none}/\textsc{entropy}/\textsc{lpm} from solving --- which \emph{isolates} the intrinsic-reward
+noise-vulnerability: only RND is hurt. $^\dagger$LPM-clean is bimodal (6/8 solve $\approx0.96$, 2/8
+collapse; mean $0.67$, std $0.41$); under noise LPM solves on all 8 seeds (std $0.001$).
+$^\ddagger$RND-noisy is highly variable (per-seed $\{0.03,0.04,0.20,0.47,0.50,0.96,0.96,0.96\}$; mean
+$0.52$, std $0.40$) --- noise destabilises it where LPM and the baseline are unaffected.}\label{tab:doorkeynoise}\end{table}
 
 Observation noise makes every state look ``novel,'' so RND's prediction-error bonus stays high and the
 agent chases noise instead of the goal; LPM's learning-progress signal stays near $0$ on unlearnable
 noise, so LPM is not distracted and effectively reverts to the (working) base policy. DoorKey-5x5
 (Table~\ref{tab:doorkeynoise}) isolates this cleanly because the task is easy enough that noisy
-perception alone does not break it. On FourRooms the same \emph{ordering} holds (RND hurt most, LPM
-least, Fig.~\ref{fig:noise} right) but the global noise also degrades the policy's perception, so all
-methods fall to $\approx 0.05$ --- ``LPM degrades less,'' not ``LPM stays solved.'' On hard
-MultiRoom-N6, noise breaks perception for everyone (RND's clean $0.32 \to 0$). \note{Slides 3.4/3.6.}
+perception alone does not break it --- so only RND is hurt, and \emph{unstably}: $3/8$ seeds still solve
+($\approx0.96$) while $3/8$ collapse ($\le0.05$), against LPM's $8/8$. On FourRooms (next paragraph)
+the global noise degrades \emph{every} method and RND separates as clearly the worst, while
+\textsc{none}/\textsc{entropy}/\textsc{lpm} stay tied (at $0.1$: \textsc{none}~$0.10$,
+\textsc{entropy}/\textsc{lpm}~$0.09$, \textsc{rnd}~$0.03$). On hard MultiRoom-N6, noise breaks
+perception for everyone (RND's clean $0.32 \to 0$).
+\note{Slides 3.4/3.6.}
+
+\paragraph{FourRooms: a fine noise sweep separates RND, but not LPM from the baseline.} A natural worry
+about the single-point ($0.1$) comparison is that the noise is simply too strong, flattening any
+differences among \textsc{none}/\textsc{entropy}/\textsc{lpm}. To check, we swept \texttt{noise\_prob}
+from $0$ to $0.1$ in steps of $0.01$ (3 seeds; Fig.~\ref{fig:noise}). The result is clarifying:
+\textbf{RND separates cleanly} --- it degrades faster than every other method and pulls below the pack
+from $\approx0.04$ onward ($0.07\!\to\!0.03$) --- but \textbf{\textsc{none}, \textsc{entropy} and LPM
+stay clustered and statistically tied} (pairwise gaps $\le0.02$, within the 3-seed std) at \emph{every}
+noise level. LPM never beats the plain baseline; at low noise it sits slightly \emph{below} it (its
+clean under-exploration deficit) and only \emph{catches up} as noise rises. \note{This corrects a
+tempting over-read: a per-point ``\% of clean return retained'' makes LPM look most robust ($38\%$ vs.\
+\textsc{entropy} $31\%$ at $0.1$), but that ratio is inflated by LPM's \emph{lower clean baseline} ---
+in absolute terms LPM $\approx$ \textsc{none} $\approx$ \textsc{entropy} throughout. The honest,
+consistent RQ4 conclusion across DoorKey and FourRooms: \emph{only RND is noise-vulnerable; LPM is
+noise-neutral} --- it avoids RND's noise-chasing failure but does not, on these extrinsic-reward
+MiniGrid tasks, confer an advantage over a plain PPO baseline (which, lacking an intrinsic bonus to be
+fooled, is itself robust).}
 
 \paragraph{LPM-clean variance is bimodality, not sampling noise (8-seed check).} The one place LPM's
 $3$-seed band looked alarmingly wide was \emph{clean} DoorKey-5x5. We bumped it to \textbf{8 seeds} to
@@ -316,9 +355,10 @@ solves the task ($\approx0.96$) \emph{or} under-explores and never reaches the g
 middle ground (mean $0.67$, std $0.41$). Adding seeds sharpened this picture rather than shrinking the
 std --- the variance is \emph{intrinsic bimodality}, not small-sample uncertainty. This is the same
 signature as the MiniWorld result (Part~I): the faithful, unclipped $\lambda_i{=}1$ LPM reward is
-noise-robust but prone to a per-seed policy collapse. RND, by contrast, is rock-solid on the same task
-($8/8$ seeds at $\approx0.965$, std $0.001$) --- its always-positive bonus gives a stable exploration
-drive, where LPM's net-zero signal can leave a seed stuck. \note{Reporting this honestly is the point;
+noise-robust but prone to a per-seed policy collapse. RND, by contrast, is \emph{unimodal} on the same
+clean task ($8/8$ seeds solve, $\approx0.87$, std $0.08$, \emph{no} collapse) --- its always-positive
+bonus gives a stable exploration drive, where LPM's net-zero signal can leave a seed stuck. (Under
+\emph{noise} the roles partly invert: it is RND that turns unstable, \S\ref{sec:rq4}.) \note{Reporting this honestly is the point;
 the wide band is a property of LPM, not a measurement defect.}
 
 \section{Agent traces (slide 3.5)}\label{sec:traces}
@@ -328,8 +368,9 @@ Animated GIFs live in \texttt{expr\_data/minigrid/figures/traces/}; representati
 \note{Hard exploration --- RND threads through the MultiRoom-N6 chain to the goal (reward 0.54).}\\[6pt]
 \includegraphics[width=0.49\textwidth]{strip_doorkey_lpm_noisy_solves.png}\hfill
 \includegraphics[width=0.49\textwidth]{strip_doorkey_rnd_noisy_fails.png}\\[2pt]
-\note{Noise robustness on DoorKey-5x5 (10\% noise): LPM (left) solves in $\sim$13 steps; RND (right)
-wanders the full budget and fails.}
+\note{Noise robustness on DoorKey-5x5 (10\% noise): LPM (left) solves (LPM is robust on all $8$ noisy
+seeds); RND (right) wanders and fails on a collapse-mode seed --- RND-noisy is highly variable
+(per-seed $0.03$--$0.96$). Representative single episodes.}
 \caption{Trajectory film-strips (evenly-spaced frames). Top: intrinsic motivation enables hard
 exploration. Bottom: LPM is noise-robust where RND is not.}\label{fig:traces}\end{figure}
 
@@ -346,14 +387,20 @@ under-exploring and never-converging (Fig.~\ref{fig:beta}).
 Only when exploration is hard: \textbf{yes, decisively, on MultiRoom-N6 (RND $0.32$ vs.\ $0.0$)}; no on
 easy/medium where the baseline suffices (Fig.~\ref{fig:ladder}). RND $>$ LPM on clean hard exploration.
 \item[\textbf{RQ4}] \emph{Does LPM generalise to other noise (beyond the MiniWorld noisy-TV)?}
-Yes --- \textbf{LPM is noise-robust and RND noise-vulnerable}, cleanest on DoorKey-5x5
-(RND $0.87\!\to\!0.03$, LPM $0.67\!\to\!0.93$; Table~\ref{tab:doorkeynoise}). This reproduces the paper's
-claim in a second, symbolic-observation domain.
+Yes --- \textbf{LPM is noise-robust and RND noise-vulnerable}, cleanest on DoorKey-5x5 (under noise LPM
+solves $8/8$ at $0.96$ while RND drops to $0.52$ and turns highly unstable, per-seed $0.03$--$0.96$;
+Table~\ref{tab:doorkeynoise}). A fine FourRooms sweep ($0$--$0.1$, Fig.~\ref{fig:noise}) confirms
+the separation is \emph{RND-vs-the-rest}: only RND degrades steeply, while
+\textsc{none}/\textsc{entropy}/LPM stay statistically tied. So LPM reproduces the paper's robustness in
+the sense that it \emph{avoids RND's noise-chasing failure}, but on these extrinsic-reward MiniGrid
+tasks it is noise-\emph{neutral} --- it does not beat a plain baseline (which, having no intrinsic bonus
+to be fooled, is itself robust).
 \end{enumerate}
 
 \noindent\textbf{One-line story for the deck:} \emph{intrinsic motivation buys you hard-exploration
-ability (RND) at the price of noise-fragility; LPM trades exploration aggressiveness for
-noise-robustness} --- and $\beta$ must be tuned or it drowns the task.
+ability (RND) at the price of noise-fragility; LPM trades that exploration aggressiveness away to avoid
+the noise-fragility --- so it never collapses like RND, but on these tasks it only matches the plain
+baseline rather than beating it} --- and $\beta$ must be tuned or it drowns the task.
 
 \section*{Slide-deck mapping (full SPEC)}
 \textbf{Deck \S2 --- Reproducing the LPM paper (Part~I).}
@@ -390,11 +437,12 @@ use chunked checkpoint--resume training (\texttt{train\_one --chunk-steps}, resu
 \texttt{PPO.load}) driven by a meta-loop re-invoking \texttt{run\_grid.py} (\texttt{ThreadPoolExecutor});
 each chunk finishes under the limit and the idle driver survives. Grids:
 \texttt{run\_grid.py --envs ... --methods rnd lpm --betas ... --noise-probs ... --seeds 1 2 3}.
-\textbf{Caveats:} (a) the MiniGrid noise is \emph{global} per-element corruption, not a localised
-noisy-TV distractor; a localised variant would be a cleaner analogue. (b) LPM under-explores clean
-hard tasks here, so the clean LPM-vs-RND gap is RND-favourable; the noise result is the LPM-favourable
-half. (c) Seeds: DoorKey-5x5 at 8 seeds (clean) confirms LPM-clean's wide band is \emph{genuine
-bimodality} ($6/8$ solve, $2/8$ collapse), not small-sample noise; the noisy DoorKey cells and all
-other envs are at 3 seeds (the noisy 8-seed bump hit a \texttt{SubprocVecEnv}+noise spawn crash and
-is pending a \texttt{DummyVecEnv} re-run).
+\textbf{Caveats:} (a) the MiniGrid noise is \emph{global cell-level} corruption (each of the
+$7\!\times\!7$ cells independently corrupted with prob.\ $0.1$ and re-drawn within valid channel
+ranges), not a localised noisy-TV distractor; a localised variant would be a cleaner analogue. (b) LPM under-explores clean
+hard tasks here, so the clean LPM-vs-RND gap is RND-favourable; under noise LPM avoids RND's collapse
+but, on a fine FourRooms sweep, only \emph{matches} the plain baseline rather than beating it (the
+robustness win is over RND, not over \textsc{none}). (c) Seeds: DoorKey-5x5 at 8 seeds \emph{both clean and noisy} confirms LPM-clean's wide band is
+\emph{genuine bimodality} ($6/8$ solve, $2/8$ collapse), not small-sample noise; the noisy 8-seed cells
+re-ran cleanly under the corrected noise model. All other envs are at 3 seeds.
 \end{document}
