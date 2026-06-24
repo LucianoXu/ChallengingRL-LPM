@@ -158,18 +158,68 @@ def fig_doorkey_noise():
     plt.close(fig)
 
 
-# --- Fig 4: FourRooms noise degradation curves ---
+# --- Fig 4: FourRooms fine noise sweep (0..0.1, 11 points) ---
 def fig_fourrooms_noise():
-    env = "MiniGrid-FourRooms-v0"; nps = [0.0, 0.1, 0.2, 0.3]
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for m in ["none", "rnd", "lpm"]:
-        var = "intrinsic_noise" if is_intrinsic(m) else "baseline_noise"
-        ys = [cell(env, var, m, npv=p)[0] for p in nps]
-        ax.plot(nps, ys, "o-", color=COLORS[m], label=LBL[m])
+    """Final eval return vs observation-noise probability on FourRooms, swept
+    0..0.1 in steps of 0.01 (3 seeds, bands = +/-std). The honest read: only RND
+    separates (it degrades much faster and pulls below the pack from ~0.04 on),
+    while none/entropy/LPM stay clustered and statistically tied across the whole
+    range -- LPM tracks the baseline, it does not beat it."""
+    env = "MiniGrid-FourRooms-v0"
+    nps = [round(0.01 * i, 2) for i in range(11)]  # 0.00 .. 0.10
+    fig, ax = plt.subplots(figsize=(7.5, 4.3))
+    for m in METHODS:
+        base = "intrinsic" if is_intrinsic(m) else "baseline"
+        means, stds = [], []
+        for p in nps:
+            if p == 0.0:
+                mu, sd = cell(env, f"{base}_no_noise", m)
+            else:
+                mu, sd = cell(env, f"{base}_noise", m, npv=p)
+            means.append(mu); stds.append(sd)
+        means, stds = np.array(means), np.array(stds)
+        ax.plot(nps, means, "o-", ms=4, color=COLORS[m], label=LBL[m])
+        ax.fill_between(nps, means - stds, means + stds, alpha=0.15, color=COLORS[m])
     ax.set_xlabel("observation-noise probability"); ax.set_ylabel("final eval return")
-    ax.set_title("FourRooms: RND degrades most under noise; LPM least")
-    ax.legend(fontsize=9); ax.set_ylim(0, 0.4)
+    ax.set_ylim(0, 0.40)
+    ax.set_title("FourRooms noise sweep (3 seeds): only RND separates;\n"
+                 "none/entropy/LPM stay clustered (LPM tracks the baseline, not above it)",
+                 fontsize=10)
+    ax.legend(fontsize=8, loc="upper right")
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig4_fourrooms_noise.png"), dpi=140)
+    plt.close(fig)
+
+
+# --- Fig 6 left: FourRooms clean vs noisy@0.1 bars (DoorKey-style snapshot) ---
+def fig_fourrooms_noise_bars():
+    """The DoorKey-style clean-vs-noisy bar comparison, recomputed on FourRooms:
+    4 methods, clean vs noisy@0.1, mean+/-std with per-seed dots. Honest snapshot
+    (no retained-% annotation): every method loses ground, none/entropy/LPM land
+    together while RND lands lowest. Companion to the full sweep."""
+    env = "MiniGrid-FourRooms-v0"
+    cvar = lambda m: "intrinsic_no_noise" if is_intrinsic(m) else "baseline_no_noise"
+    nvar = lambda m: "intrinsic_noise" if is_intrinsic(m) else "baseline_noise"
+    fig, ax = plt.subplots(figsize=(7.0, 4.3))
+    x = np.arange(len(METHODS)); w = 0.38
+    clean = [cell(env, cvar(m), m) for m in METHODS]
+    noisy = [cell(env, nvar(m), m, npv=0.1) for m in METHODS]
+    ax.bar(x - w / 2, [c[0] for c in clean], w, yerr=[c[1] for c in clean], capsize=3,
+           label="clean (mean$\\pm$std)", color="#4c78a8", alpha=0.85, zorder=1)
+    ax.bar(x + w / 2, [c[0] for c in noisy], w, yerr=[c[1] for c in noisy], capsize=3,
+           label="noisy 10% (mean$\\pm$std)", color="#e45756", alpha=0.85, zorder=1)
+    for i, m in enumerate(METHODS):
+        for xc, vals in [(x[i] - w / 2, per_seed_finals(env, cvar(m), m)),
+                         (x[i] + w / 2, per_seed_finals(env, nvar(m), m, npv=0.1))]:
+            if not vals:
+                continue
+            jit = np.linspace(-1, 1, len(vals)) * w * 0.28 if len(vals) > 1 else np.array([0.0])
+            ax.scatter(np.full(len(vals), xc) + jit, vals, s=20, color="black",
+                       zorder=3, edgecolors="white", linewidths=0.5)
+    ax.set_xticks(x); ax.set_xticklabels([LBL[m] for m in METHODS])
+    ax.set_ylabel("final eval return"); ax.set_ylim(0, 0.45)
+    ax.set_title("FourRooms: clean vs noisy 10%\n(dots = per-seed finals, 3 seeds)", fontsize=10)
+    ax.legend(fontsize=8, loc="upper right")
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig6_fourrooms_bars.png"), dpi=140)
     plt.close(fig)
 
 
@@ -213,6 +263,7 @@ def filmstrip(gif_name, out_name, n=4):
 
 if __name__ == "__main__":
     fig_ladder(); fig_beta(); fig_doorkey_noise(); fig_fourrooms_noise()
+    fig_fourrooms_noise_bars()
     fig_memory_ablation()
     filmstrip("MiniGrid-MultiRoom-N6-v0__intrinsic_no_noise__rnd__seed_1.gif",
               "strip_multiroom_rnd_solves.png")
