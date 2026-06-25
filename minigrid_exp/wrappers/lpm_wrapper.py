@@ -37,6 +37,10 @@ class LPMIntrinsicRewardWrapper(gym.Wrapper):
     mean-zero and signed. Beta should therefore be swept per method, never shared
     across methods. Faithful to
     LPM_exploration/Miniworld/experiments/models.py:LPMModel(reward_space="log").
+
+    NOTE: PPO now uses the shared wrappers.intrinsic_vec_wrapper.IntrinsicVecWrapper
+    (one model over all n_envs, updated once per rollout). This per-env wrapper
+    serves only the dormant DQN path and the unit tests of the reward formula.
     """
 
     def __init__(self, env, reward_scale: float = 0.05, learning_rate: float = 1e-3,

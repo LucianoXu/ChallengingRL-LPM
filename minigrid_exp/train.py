@@ -75,15 +75,25 @@ def get_algorithm_config(method: str = "none"):
 
 def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, run_name,
                     method="rnd", beta=None, noise_prob=0.10):
-    env_fns = []
+    from method_utils import base_intrinsic, is_intrinsic
+    from wrappers.intrinsic_models import build_shared_model
+    from wrappers.intrinsic_vec_wrapper import IntrinsicVecWrapper
+    from config import LPM_REWARD_SCALE, RND_REWARD_SCALE, RND_DEVICE
 
+    # rnd/lpm intrinsic is handled by ONE shared IntrinsicVecWrapper over the
+    # whole VecEnv (single model, per-rollout update). So the per-env envs are
+    # built WITHOUT their own intrinsic wrapper. count (dormant) still goes per-env.
+    vec_handled = bool(training and intrinsic and is_intrinsic(method))
+    per_env_intrinsic = bool(intrinsic and not vec_handled)
+
+    env_fns = []
     for env_index in range(n_envs):
         env_seed = seed + env_index
 
         def _make_env(env_seed=env_seed):
             return make_env(
                 env_id=env_id,
-                intrinsic=intrinsic,
+                intrinsic=per_env_intrinsic,
                 noise=noise,
                 seed=env_seed,
                 noise_prob=noise_prob,
@@ -94,14 +104,24 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
 
         env_fns.append(_make_env)
 
-    # SubprocVecEnv runs the n_envs envs (+ per-env intrinsic wrappers) in
-    # parallel processes (uses ~n_envs cores, parallelizes the per-step compute);
-    # DummyVecEnv runs them sequentially in one process. SB3 picks a safe default
-    # start method (forkserver/spawn) when unspecified.
+    # SubprocVecEnv runs the n_envs envs in parallel processes; DummyVecEnv runs
+    # them sequentially in one process. SB3 picks a safe default start method
+    # (forkserver/spawn) when unspecified. The shared intrinsic model lives ABOVE
+    # the VecEnv in the main process, so it sees all n_envs transitions at once.
     if PPO_VEC_ENV == "subproc" and n_envs > 1:
         env = SubprocVecEnv(env_fns)
     else:
         env = DummyVecEnv(env_fns)
+
+    if vec_handled:
+        base = base_intrinsic(method)
+        scale = (LPM_REWARD_SCALE if base == "lpm" else RND_REWARD_SCALE) if beta is None else beta
+        model = build_shared_model(
+            base, obs_dim=env.observation_space.shape[0],
+            num_actions=env.action_space.n, reward_scale=scale,
+            device=RND_DEVICE, seed=seed)
+        env = IntrinsicVecWrapper(env, model, n_steps=PPO_HYPERPARAMS["n_steps"])
+
     if log_dir is not None:
         return VecMonitor(env, filename=str(log_dir / run_name),
                           info_keywords=("ep_extrinsic", "ep_intrinsic"))

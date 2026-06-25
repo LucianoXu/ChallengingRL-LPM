@@ -56,6 +56,10 @@ class RNDIntrinsicRewardWrapper(gym.Wrapper):
 
     The target network is fixed. The predictor is trained online to match it.
     Novel observations have larger prediction error and therefore larger bonus.
+
+    NOTE: PPO now uses the shared wrappers.intrinsic_vec_wrapper.IntrinsicVecWrapper
+    (one model over all n_envs, updated once per rollout). This per-env wrapper
+    serves only the dormant DQN path and the unit tests of the reward formula.
     """
 
     def __init__(

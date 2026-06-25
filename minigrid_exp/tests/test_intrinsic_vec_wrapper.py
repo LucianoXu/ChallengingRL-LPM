@@ -54,6 +54,23 @@ def test_reward_is_extrinsic_plus_intrinsic():
     assert rews.shape == (2,) and np.all(np.isfinite(rews))
 
 
+def test_make_vector_env_uses_shared_wrapper():
+    import train
+    from config import PPO_HYPERPARAMS
+    env = train.make_vector_env(ENV, intrinsic=True, noise=False, seed=0,
+                                training=True, n_envs=2, log_dir=None,
+                                run_name="t", method="lpm", beta=0.01)
+    # VecMonitor -> IntrinsicVecWrapper -> VecEnv ; exactly one shared model.
+    inner = env
+    found = None
+    while hasattr(inner, "venv"):
+        if isinstance(inner, IntrinsicVecWrapper):
+            found = inner
+        inner = inner.venv
+    assert found is not None and found.n_steps == PPO_HYPERPARAMS["n_steps"]
+    env.close()
+
+
 def test_ep_intrinsic_logged_at_episode_end():
     # MiniGrid-Empty truncates at max_steps; run long enough to end an episode.
     w, _ = _wrap("rnd", n_steps=4, n=2)
