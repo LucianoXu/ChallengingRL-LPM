@@ -60,8 +60,10 @@ except OSError:
 # --------------------------------------------------------------------------- #
 def _sanitize_for_decode(obs_img: np.ndarray) -> np.ndarray:
     """Clamp noise-injected codes into valid ranges so Grid.decode won't raise.
-    Object idx 0..10, color 0..5, state 0..2; the noise wrapper draws 0..9, so a
-    corrupted cell still decodes to *some* object (the agent's hallucination)."""
+    The cell-level noise wrapper already draws in-range codes (object 0..10,
+    color 0..5, state 0..2), so this clamp is now a safety no-op kept for
+    robustness; a corrupted cell still decodes to *some* object (the
+    agent's hallucination)."""
     out = obs_img.astype(np.uint8).copy()
     out[..., 0] = np.clip(out[..., 0], 0, 10)   # object
     out[..., 1] = np.clip(out[..., 1], 0, 5)    # color
@@ -350,10 +352,11 @@ def write_readme(results: dict):
         "symbolic observation rendered as MiniGrid sprites — under noise, "
         "corrupted cells become *hallucinated objects* (phantom keys, doors, "
         "lava, goals), which is the noisy-TV failure mode itself. The noise "
-        f"wrapper corrupts each channel-element independently with prob "
-        f"{NOISE_PROB:g} (the obs is a 7×7×3 [object, color, state] array); a "
-        "**magenta outline** flags cells whose *object* was altered (~9% of "
-        "cells; ~24% have at least one of the three channels changed).",
+        f"wrapper corrupts each of the 49 cells independently with prob "
+        f"{NOISE_PROB:g} (per-*cell*, not per-element), re-drawing all "
+        "three channels of a hit cell within their valid ranges (object 0–10, "
+        "color 0–5, state 0–2); a **magenta outline** flags cells whose "
+        "*object* channel was altered (so on average ~10% of cells are hit).",
         "",
     ]
     (GIFS_DIR / "README.md").write_text("\n".join(lines))

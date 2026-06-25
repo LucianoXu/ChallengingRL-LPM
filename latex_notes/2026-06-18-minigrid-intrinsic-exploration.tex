@@ -235,7 +235,9 @@ PPO steps.
 \section{$\beta$: how to mix extrinsic and intrinsic reward (RQ2)}\label{sec:beta}
 \begin{figure}[h]\centering\includegraphics[width=0.72\textwidth]{fig2_beta_sweep.png}
 \caption{$\beta$ sweep on FourRooms (500k). RND rises to a sweet spot ($\beta\!\approx\!0.001$--$0.005$,
-matching the baseline) then collapses to $0$ at $\beta{=}0.05$; LPM declines monotonically.}
+matching the baseline) then collapses to $0$ at $\beta{=}0.05$; LPM declines monotonically. The dotted
+line is the \emph{theoretical-max} eval return for FourRooms ($0.86$, optimal play; see
+\S\ref{sec:optmax}) --- every method sits far below it, i.e.\ nobody solves FourRooms reliably.}
 \label{fig:beta}\end{figure}
 
 At $\beta{=}0.05$ the per-episode \emph{intrinsic} reward was $100$--$700\times$ the sparse extrinsic
@@ -254,7 +256,9 @@ finals, $8$ on DoorKey, $3$ elsewhere --- same windowed definition as the bars).
 baseline already solves/explores; intrinsic is unneeded (and slightly hurts). Hard MultiRoom-N6: only
 RND reaches the goal (its $3$ dots sit at $\approx0.32$ while every other method's dots lie on the
 floor at $0$). The dots also expose that LPM-clean DoorKey's wide bar is a $0$/$0.96$ \emph{bimodal
-split}, not a uniform spread.}\label{fig:ladder}\end{figure}
+split}, not a uniform spread. The dashed per-env lines are the \emph{theoretical-max} eval returns
+(optimal play; \S\ref{sec:optmax}): DoorKey $0.97$, FourRooms $0.86$, MultiRoom-N6 $0.65$ --- so on
+DoorKey the solvers are near-optimal, whereas on FourRooms/MultiRoom everyone is far from the ceiling.}\label{fig:ladder}\end{figure}
 
 \begin{table}[h]\centering
 \begin{tabular}{lcccc}
@@ -290,7 +294,9 @@ dynamics (so it under-explores clean hard tasks).
 \includegraphics[width=0.49\textwidth]{fig6_fourrooms_bars.png}\hfill
 \includegraphics[width=0.49\textwidth]{fig4_fourrooms_noise.png}
 \caption{\textbf{FourRooms noise robustness} (both panels recomputed on FourRooms; the DoorKey-5x5
-numbers are in Table~\ref{tab:doorkeynoise}). \textbf{Left:} clean vs.\ 10\% noise per method (bars =
+numbers are in Table~\ref{tab:doorkeynoise}). The dotted line in the left panel is the \emph{theoretical-max}
+eval return for FourRooms ($0.86$, optimal play; \S\ref{sec:optmax}) --- note how far below it even the
+clean runs sit. \textbf{Left:} clean vs.\ 10\% noise per method (bars =
 mean$\pm$std; dots = per-seed finals, 3 seeds) --- every method loses ground, and
 \textsc{none}/\textsc{entropy}/\textsc{lpm} land together ($\approx0.09$--$0.10$) while RND falls lowest
 ($0.03$). \textbf{Right:} the full sweep \texttt{noise\_prob} $0$--$0.1$ in steps of $0.01$ (bands
@@ -445,4 +451,28 @@ but, on a fine FourRooms sweep, only \emph{matches} the plain baseline rather th
 robustness win is over RND, not over \textsc{none}). (c) Seeds: DoorKey-5x5 at 8 seeds \emph{both clean and noisy} confirms LPM-clean's wide band is
 \emph{genuine bimodality} ($6/8$ solve, $2/8$ collapse), not small-sample noise; the noisy 8-seed cells
 re-ran cleanly under the corrected noise model. All other envs are at 3 seeds.
+
+\section{Theoretical-max eval return}\label{sec:optmax}
+MiniGrid gives \texttt{reward} $= 1 - 0.9\,(\text{steps}/\text{max\_steps})$ on reaching the goal (0 on
+timeout), so the \emph{theoretical-max} eval return (the eval averages 10 random layouts) is
+$1 - 0.9\,\mathrm{E}[d^{*}]/\text{max\_steps}$, where $d^{*}$ is the optimal action count to the goal. We
+compute $d^{*}$ exactly by breadth-first search over (position, direction, carrying, opened-doors), using
+the agent's own action repertoire (turn left/right, forward, pickup, toggle), and average the optimal
+reward over $300$ random layouts per env (\texttt{minigrid\_exp/optimal\_reward.py}). Results:
+
+\begin{center}\begin{tabular}{lccc}
+\toprule
+env & \texttt{max\_steps} & opt.\ steps & \textbf{theoretical-max return}\\
+\midrule
+DoorKey-5x5   & 250 & $\sim$9.8  & \textbf{0.965}\\
+FourRooms     & 100 & $\sim$16.0 & \textbf{0.856}\\
+MultiRoom-N6  & 120 & $\sim$46.5 & \textbf{0.652}\\
+\bottomrule
+\end{tabular}\end{center}
+
+\noindent The ceiling is well below $1.0$ (reaching the goal already costs a fraction of the step
+budget), and lower for the longer environments. This calibrates the result figures: on DoorKey the
+solvers run near-optimal ($\approx0.96$ vs $0.965$), whereas on FourRooms ($\sim$0.3 vs $0.86$) and
+MultiRoom-N6 (RND $0.32$ vs $0.65$) every method leaves large headroom --- these tasks are far from
+solved, not near-saturated.
 \end{document}

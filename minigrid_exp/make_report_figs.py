@@ -56,6 +56,16 @@ COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c", "lpm": "#d6
 LBL = {"none": "none", "entropy": "entropy", "rnd": "RND", "lpm": "LPM",
        "rnd_lstm": "RND+LSTM", "lpm_lstm": "LPM+LSTM"}
 
+# Theoretical-max eval return = 1 - 0.9*E[optimal_steps]/max_steps, from an exact
+# BFS solver over 300 random layouts (see optimal_reward.py). This is the ceiling a
+# perfect (optimal-play) agent could reach on each env's eval-layout distribution;
+# ~1.0 is unreachable because solving costs a fraction of the step budget.
+THEORETICAL_MAX = {
+    "MiniGrid-DoorKey-5x5-v0": 0.965,
+    "MiniGrid-FourRooms-v0": 0.856,
+    "MiniGrid-MultiRoom-N6-v0": 0.652,
+}
+
 
 def cell(env, variant, method, beta=np.nan, npv=np.nan):
     d = TAB[(TAB.env == env) & (TAB.variant == variant) & (TAB.method == method)]
@@ -88,6 +98,13 @@ def fig_ladder():
             jit = np.linspace(-1, 1, len(vals)) * w * 0.3 if len(vals) > 1 else np.array([0.0])
             ax.scatter(np.full(len(vals), xpos[j]) + jit, vals, s=13, color="black",
                        zorder=3, edgecolors="white", linewidths=0.4)
+    # Per-env theoretical-max (optimal play) reference line over each env group.
+    for j, (env, _) in enumerate(envs):
+        ax.hlines(THEORETICAL_MAX[env], x[j] - 0.42, x[j] + 0.42, colors="black",
+                  linestyles="--", lw=1.3, zorder=4,
+                  label=("theoretical max (optimal play)" if j == 0 else None))
+        ax.text(x[j] + 0.43, THEORETICAL_MAX[env], f"{THEORETICAL_MAX[env]:.2f}",
+                va="center", ha="left", fontsize=7, color="black")
     ax.set_xticks(x); ax.set_xticklabels([e[1] for e in envs])
     ax.set_ylabel("final eval return")
     ax.set_title("Difficulty ladder (clean): intrinsic motivation is difficulty-gated\n"
@@ -110,11 +127,13 @@ def fig_beta():
     ax.plot(x, rnd, "o-", color=COLORS["rnd"], label="RND")
     ax.plot(x, lpm, "s-", color=COLORS["lpm"], label="LPM")
     ax.axhline(base, ls="--", color=COLORS["none"], label="baseline (none)")
+    tmax = THEORETICAL_MAX["MiniGrid-FourRooms-v0"]
+    ax.axhline(tmax, ls=":", color="black", lw=1.4, label=f"theoretical max ({tmax:.2f})")
     ax.set_xscale("log"); ax.set_xlabel(r"intrinsic coefficient $\beta$ (0 shown at left)")
     ax.set_ylabel("final eval return")
     ax.set_title(r"$\beta$ sweep, FourRooms (500k): too large $\Rightarrow$ drowns the sparse signal")
     ax.set_xticks(x); ax.set_xticklabels(["0", "5e-4", "1e-3", "5e-3", "1e-2", "5e-2"])
-    ax.legend(fontsize=9); ax.set_ylim(0, 0.4)
+    ax.legend(fontsize=9); ax.set_ylim(0, 0.95)
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig2_beta_sweep.png"), dpi=140)
     plt.close(fig)
 
@@ -215,8 +234,10 @@ def fig_fourrooms_noise_bars():
             jit = np.linspace(-1, 1, len(vals)) * w * 0.28 if len(vals) > 1 else np.array([0.0])
             ax.scatter(np.full(len(vals), xc) + jit, vals, s=20, color="black",
                        zorder=3, edgecolors="white", linewidths=0.5)
+    tmax = THEORETICAL_MAX["MiniGrid-FourRooms-v0"]
+    ax.axhline(tmax, ls=":", color="black", lw=1.4, label=f"theoretical max ({tmax:.2f})")
     ax.set_xticks(x); ax.set_xticklabels([LBL[m] for m in METHODS])
-    ax.set_ylabel("final eval return"); ax.set_ylim(0, 0.45)
+    ax.set_ylabel("final eval return"); ax.set_ylim(0, 0.95)
     ax.set_title("FourRooms: clean vs noisy 10%\n(dots = per-seed finals, 3 seeds)", fontsize=10)
     ax.legend(fontsize=8, loc="upper right")
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig6_fourrooms_bars.png"), dpi=140)
