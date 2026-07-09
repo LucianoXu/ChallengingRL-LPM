@@ -141,7 +141,10 @@ def main():
             "model_kwargs": model_kwargs,
         })
         with open(args.config_log, "w") as f:
-            json.dump(config, f, indent=2, sort_keys=True)
+            # local fix: num_actions is a numpy int64 (gymnasium Discrete.n),
+            # which json cannot serialize; coerce any numpy scalar to native.
+            json.dump(config, f, indent=2, sort_keys=True,
+                      default=lambda o: o.item() if hasattr(o, "item") else str(o))
     cols = ["update", "step", "frames", "fps", "visited_count", "coverage_frac",
             "beyond_wall_frac", "time_at_wall_frac", "int_rew_mean",
             "pred_loss", "unc_loss", "fwd_loss", "rnd_loss",
