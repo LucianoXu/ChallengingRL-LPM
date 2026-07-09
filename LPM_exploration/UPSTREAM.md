@@ -285,3 +285,13 @@ ours vs. what is upstream.
   a cell, so the bug went unnoticed). Fixed by passing `default=lambda o: o.item() if
   hasattr(o, "item") else str(o)` to `json.dump` so any numpy scalar is coerced to a
   native Python type. Marked inline with a `# local fix:` comment.
+
+- **2026-07-09 — `Miniworld/experiments/run_hparam_sweep.py` llvmpipe thread pin
+  (parallel-efficiency fix).** `_run_one` already pinned `OMP/MKL/OpenBLAS/NumExpr/VecLib`
+  to `threads_per_job` (=1), but not Mesa's software-GL renderer. Under headless
+  `PYGLET_HEADLESS=true`, each job's llvmpipe spawns ~1 render thread per core (~32 on
+  this box), so N parallel jobs oversubscribe massively (observed: 96 jobs → ~6000
+  threads, load ~218, ~4x slower — expr1 took ~70 min/wave instead of ~17). Added
+  `LP_NUM_THREADS` to the same env-pinning tuple so llvmpipe also gets 1 thread/job.
+  Benefits every sweep launched through this runner (expr1 reruns, expr2). Marked
+  inline with a `# local fix:` comment.
