@@ -29,6 +29,48 @@ selects the LSTM policy, the base method selects the intrinsic wrapper.
 `analyze.py` also writes matrix-oriented outputs: `table_final_by_seed.csv`,
 `table_matrix_stats.csv`, and `fig_matrix_*.png`.
 
+## Full matrix launcher
+
+Use the top-level `expr3.py` script to launch the main MiniGrid matrix:
+
+```bash
+python expr3.py
+```
+
+This previews 3 environments x clean/noisy x 5 visible methods
+(`none`, `entropy`, `rnd`, `lpm`, `icm`) x 3 seeds. The launcher delegates to
+`run_grid.py`, so training is checkpointed and resumable by progress sidecars.
+Start the actual chunked run with:
+
+```bash
+python expr3.py --run --python ./LPM_exploration/.venv/bin/python
+```
+
+Defaults: DoorKey-5x5 uses 1M steps/run, FourRooms uses 2M steps/run, and
+MultiRoom-N6 uses 3M steps/run; chunks are 300k steps. Re-run the same command
+to resume incomplete cells. After all cells complete, `expr3.py` runs
+`analyze.py` automatically.
+
+Use `expr4.py` for the heavier MiniGrid hyperparameter sweeps:
+
+```bash
+python expr4.py
+python expr4.py --run --python ./LPM_exploration/.venv/bin/python
+```
+
+It launches two resumable sweep families:
+
+- FourRooms and MultiRoom-N6 beta sweep for `rnd`, `lpm`, and `icm` with
+  beta values `0 0.0005 0.001 0.005 0.01 0.05`.
+- FourRooms-only observation-noise sweep for `none`, `entropy`, `rnd`, `lpm`,
+  and `icm` with noise probabilities `0 0.01 0.02 ... 0.10`.
+
+The beta sweep is clean (`intrinsic_no_noise`). The noise sweep uses the
+`baseline_noise` / `intrinsic_noise` variants; `noise_prob=0` is included as a
+same-wrapper zero-noise anchor. By default, the noise sweep uses each intrinsic
+method's configured beta; pass `--noise-betas ...` only if you intentionally
+want a beta x noise grid.
+
 ## Trajectory-GIF gallery (training-stage walkthroughs)
 
 A curated, two-panel GIF gallery showing how an agent's maze walk evolves across

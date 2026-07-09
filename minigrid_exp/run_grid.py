@@ -13,6 +13,7 @@ import argparse
 import itertools
 import os
 import subprocess
+import sys
 import tempfile
 # ThreadPoolExecutor (not ProcessPoolExecutor): run_cell only blocks on
 # subprocess.run, so threads give identical parallelism (the real work is in the
@@ -23,7 +24,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import config
 
 EXP = os.path.dirname(os.path.abspath(__file__))
-PY = os.path.join(os.path.dirname(EXP), "LPM_exploration", ".venv", "bin", "python")
+_DEFAULT_PY = os.path.join(os.path.dirname(EXP), "LPM_exploration", ".venv", "bin", "python")
+PY = os.environ.get("MINIGRID_PYTHON", _DEFAULT_PY if os.path.exists(_DEFAULT_PY) else sys.executable)
 
 # (variant_name, intrinsic, noise)
 VARIANTS = [(v["name"], v["intrinsic"], v["noise"]) for v in config.VARIANTS]
@@ -69,12 +71,17 @@ def main():
     ap.add_argument("--jobs", type=int, default=16)
     ap.add_argument("--threads-per-job", type=int, default=0,
                     help="CPU threads per run (OMP/MKL/...); 0 = auto (cores // jobs, min 1) to saturate the box")
+    ap.add_argument("--python", default=None,
+                    help="Python executable used for train_one.py children")
     ap.add_argument("--envs", nargs="+", default=None,
                     help="restrict to these env ids; default = all config envs")
     ap.add_argument("--variants", nargs="+", default=None,
                     help="restrict to these variant names; default = all variants")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    global PY
+    if a.python:
+        PY = a.python
 
     os.makedirs(LOG_DIR, exist_ok=True)
     envs = a.envs if a.envs else [e for tier in config.ENVIRONMENTS.values() for e in tier]
