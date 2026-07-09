@@ -142,20 +142,22 @@ class LPMModel(IntrinsicModel):
     """
 
     def __init__(self, input_shape, num_actions, device="cpu", eta=1.0,
-                 buffer_size=100, update_unc_every=None, reward_space="log"):
+                 buffer_size=100, update_unc_every=None, reward_space="log",
+                 pred_lr=1e-3, unc_lr=None):
         self.device = device
         self.num_actions = num_actions
         self.eta = eta
         self.reward_space = reward_space
         self.pred = _Decoder(input_shape, num_actions).to(device)
-        self.pred_opt = optim.Adam(self.pred.parameters(), lr=1e-3)
+        self.pred_opt = optim.Adam(self.pred.parameters(), lr=pred_lr)
         self.unc = _UncertaintyNet(input_shape, num_actions).to(device)
         # Error-model lr: the notebook's 1e-2 overshoots g_phi into the [-10,10]
         # clamp under the log-space objective (zero-gradient -> dead error model),
         # so the faithful log reward uses 1e-3 (the only lr C.2 specifies). Raw
         # mode keeps 1e-2 to reproduce the pre-fix runs exactly.
-        self.unc_opt = optim.Adam(self.unc.parameters(),
-                                  lr=1e-2 if reward_space == "raw" else 1e-3)
+        if unc_lr is None:
+            unc_lr = 1e-2 if reward_space == "raw" else 1e-3
+        self.unc_opt = optim.Adam(self.unc.parameters(), lr=unc_lr)
         self.buf = []  # (state, action, mse)
         self.buffer_size = buffer_size
         # Alg 1 updates f_theta and g_phi together every cycle; the legacy raw
@@ -298,16 +300,16 @@ class NoneModel(IntrinsicModel):
         return {}
 
 
-def build_model(name, input_shape, num_actions, device="cpu"):
+def build_model(name, input_shape, num_actions, device="cpu", **kwargs):
     name = name.lower()
     if name == "lpm":
-        return LPMModel(input_shape, num_actions, device)
+        return LPMModel(input_shape, num_actions, device, **kwargs)
     if name == "icm":
-        return ICMModel(input_shape, num_actions, device)
+        return ICMModel(input_shape, num_actions, device, **kwargs)
     if name == "rnd":
-        return RNDModel(input_shape, num_actions, device)
+        return RNDModel(input_shape, num_actions, device, **kwargs)
     if name == "mse":
-        return MSEModel(input_shape, num_actions, device)
+        return MSEModel(input_shape, num_actions, device, **kwargs)
     if name == "none":
         return NoneModel()
     raise ValueError(f"unknown method {name!r}")

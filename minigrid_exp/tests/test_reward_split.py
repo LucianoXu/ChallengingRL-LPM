@@ -22,7 +22,8 @@ def _rollout_until_done(env, max_steps=5000):
         per_step_ext += float(info.get("extrinsic_reward", reward))
         per_step_intr += float(
             info.get("rnd_intrinsic_reward",
-                     info.get("lpm_intrinsic_reward", 0.0))
+                     info.get("lpm_intrinsic_reward",
+                              info.get("icm_intrinsic_reward", 0.0)))
         )
         if terminated or truncated:
             return per_step_ext, per_step_intr, info

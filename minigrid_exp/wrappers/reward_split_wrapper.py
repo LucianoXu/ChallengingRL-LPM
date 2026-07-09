@@ -5,7 +5,7 @@ import gymnasium as gym
 
 class EpisodeRewardSplitWrapper(gym.Wrapper):
     """Accumulate per-episode extrinsic and intrinsic reward from the info dict
-    (written by the RND/LPM intrinsic wrappers) and expose the sums at episode
+    (written by the intrinsic wrappers) and expose the sums at episode
     end as info['ep_extrinsic'] and info['ep_intrinsic'], so a Monitor created
     with info_keywords=('ep_extrinsic','ep_intrinsic') persists them to the
     monitor CSV.
@@ -31,7 +31,8 @@ class EpisodeRewardSplitWrapper(gym.Wrapper):
         self._ep_intr += float(
             info.get("rnd_intrinsic_reward",
                      info.get("lpm_intrinsic_reward",
-                              info.get("count_intrinsic_reward", 0.0))))
+                              info.get("icm_intrinsic_reward",
+                                       info.get("count_intrinsic_reward", 0.0)))))
         if terminated or truncated:
             info["ep_extrinsic"] = self._ep_ext
             info["ep_intrinsic"] = self._ep_intr

@@ -21,7 +21,7 @@ from config import MODELS_DIR, EXPR_DATA  # noqa: E402
 
 RUN_RE = re.compile(
     r"(?P<env>.+?)__(?P<variant>baseline_no_noise|baseline_noise|"
-    r"intrinsic_no_noise|intrinsic_noise)__(?P<method>rnd|lpm|none|entropy|count)__seed_(?P<seed>\d+)")
+    r"intrinsic_no_noise|intrinsic_noise)__(?P<method>rnd|lpm|icm|none|entropy|count)__seed_(?P<seed>\d+)")
 
 
 def render(run_name, max_episodes=40, max_steps=300, fps=8, prefer_solved=True):

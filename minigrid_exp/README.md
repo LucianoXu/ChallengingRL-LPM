@@ -2,8 +2,9 @@
 
 Incorporated + rebuilt from the private repo `github.com/JosefGh/minigrid_intrinsic_reward`
 (Youssef), 2026-06-17. SB3 DQN(UCB)/PPO on flat MiniGrid observations, with a
-global observation-noise wrapper and an RND intrinsic-reward wrapper. This repo's
-additions: a paper-faithful LPM wrapper (`wrappers/lpm_wrapper.py`), explicit
+global observation-noise wrapper and intrinsic-reward wrappers. This repo's
+additions: paper-faithful LPM (`wrappers/lpm_wrapper.py`), ICM
+(`wrappers/icm_wrapper.py`), explicit
 `method`/`beta` parameters, a process-parallel grid runner (`run_grid.py`), and
 analysis writing to `expr_data/minigrid/`. See `docs/minigrid_setup_analysis.md`
 and `docs/SPEC.md`.
@@ -21,9 +22,12 @@ The DQN(UCB) code (`ucb_dqn.py`, `DQN_*` config) is retained but dormant.
 Use `analyze.py` for all post-run analysis — it understands the run-name format
 `<env>__<variant>__<method>__seed_<n>[__beta<b>]` — and `make_report_figs.py` for the
 report figures. `make_trace.py` renders a single trained policy's trajectory as a GIF.
-Methods include the recurrent-policy arms `rnd_lstm` / `lpm_lstm` (RND/LPM intrinsic
+Methods include RND, ICM, and LPM, plus the recurrent-policy arms
+`rnd_lstm` / `icm_lstm` / `lpm_lstm` (intrinsic
 reward trained with an `sb3-contrib` `RecurrentPPO` `MlpLstmPolicy`); a `_lstm` suffix
 selects the LSTM policy, the base method selects the intrinsic wrapper.
+`analyze.py` also writes matrix-oriented outputs: `table_final_by_seed.csv`,
+`table_matrix_stats.csv`, and `fig_matrix_*.png`.
 
 ## Trajectory-GIF gallery (training-stage walkthroughs)
 

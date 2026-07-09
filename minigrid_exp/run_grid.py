@@ -5,14 +5,15 @@ parallelism (the GIL makes thread pools poor for SB3 stepping). Resumable: a
 cell is complete iff its progress sidecar records >= total requested steps.
 
 Usage:
-  PYTHONPATH=. python run_grid.py --steps 1000000 --jobs 32
-  PYTHONPATH=. python run_grid.py --betas 0.0 0.01 0.05 0.1 0.5 --jobs 32   # beta sweep
+  PYTHONPATH=. python run_grid.py --steps 1000000 --jobs 16
+  PYTHONPATH=. python run_grid.py --betas 0.0 0.01 0.05 0.1 0.5 --jobs 16   # beta sweep
   PYTHONPATH=. python run_grid.py --dry-run
 """
 import argparse
 import itertools
 import os
 import subprocess
+import tempfile
 # ThreadPoolExecutor (not ProcessPoolExecutor): run_cell only blocks on
 # subprocess.run, so threads give identical parallelism (the real work is in the
 # child processes) without multiprocessing's fork/resource-tracker fragility,
@@ -26,6 +27,7 @@ PY = os.path.join(os.path.dirname(EXP), "LPM_exploration", ".venv", "bin", "pyth
 
 # (variant_name, intrinsic, noise)
 VARIANTS = [(v["name"], v["intrinsic"], v["noise"]) for v in config.VARIANTS]
+LOG_DIR = os.path.join(tempfile.gettempdir(), "minigrid_logs")
 
 
 def cell_complete(env_id, variant, method, seed, tag, total_steps):
@@ -59,12 +61,12 @@ def main():
     ap.add_argument("--chunk-steps", type=int, default=config.CHUNK_STEPS,
                     help="max timesteps per chunk (default: config.CHUNK_STEPS)")
     ap.add_argument("--seeds", type=int, nargs="+", default=config.SEEDS)
-    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm"])
+    ap.add_argument("--methods", nargs="+", default=["rnd", "lpm", "icm"])
     ap.add_argument("--betas", type=float, nargs="+", default=[None],
                     help="intrinsic-reward scales to sweep; None = config default")
     ap.add_argument("--noise-probs", type=float, nargs="+", default=[0.10],
                     help="observation noise probabilities to sweep (noise variants only)")
-    ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--jobs", type=int, default=16)
     ap.add_argument("--threads-per-job", type=int, default=0,
                     help="CPU threads per run (OMP/MKL/...); 0 = auto (cores // jobs, min 1) to saturate the box")
     ap.add_argument("--envs", nargs="+", default=None,
@@ -74,7 +76,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
-    os.makedirs("/tmp/minigrid_logs", exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
     envs = a.envs if a.envs else [e for tier in config.ENVIRONMENTS.values() for e in tier]
 
     variants = VARIANTS
@@ -123,7 +125,7 @@ def main():
 
     done = failed = 0
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        futs = {ex.submit(run_cell, cmd, f"/tmp/minigrid_logs/{rid}.out", threads): rid
+        futs = {ex.submit(run_cell, cmd, os.path.join(LOG_DIR, f"{rid}.out"), threads): rid
                 for rid, cmd in pending}
         for fut in as_completed(futs):
             rid = futs[fut]

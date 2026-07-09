@@ -7,6 +7,7 @@ from sb3_contrib import RecurrentPPO
 from wrappers.env_factory import make_env
 from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
 from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
+from wrappers.icm_wrapper import ICMIntrinsicRewardWrapper
 
 
 def _has_wrapper(env, cls):
@@ -29,6 +30,12 @@ def test_lpm_lstm_builds_lpm_wrapper():
     env = make_env("MiniGrid-Empty-8x8-v0", intrinsic=True, training=True,
                    method="lpm_lstm", beta=0.001)
     assert _has_wrapper(env, LPMIntrinsicRewardWrapper)
+
+
+def test_icm_lstm_builds_icm_wrapper():
+    env = make_env("MiniGrid-Empty-8x8-v0", intrinsic=True, training=True,
+                   method="icm_lstm", beta=0.005)
+    assert _has_wrapper(env, ICMIntrinsicRewardWrapper)
 
 
 def test_recurrent_ppo_constructs_and_steps():

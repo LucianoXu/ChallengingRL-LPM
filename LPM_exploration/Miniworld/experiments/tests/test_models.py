@@ -72,6 +72,9 @@ def test_lpm_error_model_lr_is_paper_consistent():
     assert models.LPMModel(INP, 5, device="cpu").unc_opt.param_groups[0]["lr"] == 1e-3
     raw = models.LPMModel(INP, 5, device="cpu", reward_space="raw")
     assert raw.unc_opt.param_groups[0]["lr"] == 1e-2
+    tuned = models.LPMModel(INP, 5, device="cpu", pred_lr=3e-4, unc_lr=7e-4)
+    assert tuned.pred_opt.param_groups[0]["lr"] == 3e-4
+    assert tuned.unc_opt.param_groups[0]["lr"] == 7e-4
 
 
 @pytest.mark.parametrize("name,expect", [
@@ -94,3 +97,9 @@ def test_none_model_zero_reward():
 def test_build_model_all_names():
     for n in ["lpm", "rnd", "icm", "mse", "none"]:
         assert isinstance(models.build_model(n, INP, 5, "cpu"), models.IntrinsicModel)
+
+
+def test_build_model_forwards_hyperparameters():
+    m = models.build_model("lpm", INP, 5, "cpu", buffer_size=7, unc_lr=2e-3)
+    assert m.buffer_size == 7
+    assert m.unc_opt.param_groups[0]["lr"] == 2e-3

@@ -23,10 +23,17 @@ import matplotlib.pyplot as plt
 
 import config
 
+METHOD_ORDER = ["none", "entropy", "rnd", "icm", "lpm", "rnd_lstm", "icm_lstm", "lpm_lstm"]
+ENV_ORDER = [
+    "MiniGrid-DoorKey-5x5-v0",
+    "MiniGrid-FourRooms-v0",
+    "MiniGrid-MultiRoom-N6-v0",
+]
+
 RUN_RE = re.compile(
     r"^(?P<env>.+?)__(?P<variant>baseline_no_noise|baseline_noise|"
     r"intrinsic_no_noise|intrinsic_noise)__"
-    r"(?P<method>rnd_lstm|lpm_lstm|rnd|lpm|count|entropy|none)__seed_(?P<seed>\d+)"
+    r"(?P<method>rnd_lstm|lpm_lstm|icm_lstm|rnd|lpm|icm|count|entropy|none)__seed_(?P<seed>\d+)"
     r"(?:__beta(?P<beta>[0-9.eE+-]+))?(?:__np(?P<np>[0-9.eE+-]+))?$")
 
 
@@ -116,15 +123,73 @@ def plot_curves(summary: pd.DataFrame, out_dir: str):
 
 
 def final_success_table(df: pd.DataFrame, frac: float = 0.1) -> pd.DataFrame:
+    fdf = per_seed_final_returns(df, frac=frac)
+    return (fdf.groupby(["env", "variant", "method", "beta", "np"], dropna=False)["final_return"]
+            .agg(["mean", "std", "count"]).reset_index())
+
+
+def per_seed_final_returns(df: pd.DataFrame, frac: float = 0.1) -> pd.DataFrame:
     out = []
     for keys, s in df.groupby(["env", "variant", "method", "beta", "np", "seed"], dropna=False):
         s = s.sort_values("timestep")
         k = max(1, int(len(s) * frac))
         out.append({**dict(zip(["env", "variant", "method", "beta", "np", "seed"], keys)),
                     "final_return": s["mean_return"].tail(k).mean()})
-    fdf = pd.DataFrame(out)
-    return (fdf.groupby(["env", "variant", "method", "beta", "np"], dropna=False)["final_return"]
-            .agg(["mean", "std", "count"]).reset_index())
+    return pd.DataFrame(out)
+
+
+def matrix_stats_table(per_seed: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate the experiment matrix with variance and solve-rate columns."""
+    rows = []
+    group_cols = ["env", "variant", "method", "beta", "np"]
+    for keys, s in per_seed.groupby(group_cols, dropna=False):
+        vals = s["final_return"].to_numpy(dtype=float)
+        rows.append({
+            **dict(zip(group_cols, keys)),
+            "mean": float(np.mean(vals)),
+            "std": float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0,
+            "sem": float(np.std(vals, ddof=1) / np.sqrt(len(vals))) if len(vals) > 1 else 0.0,
+            "median": float(np.median(vals)),
+            "iqr": float(np.percentile(vals, 75) - np.percentile(vals, 25)),
+            "count": int(len(vals)),
+            "solve_rate_0p5": float(np.mean(vals >= 0.5)),
+            "zero_rate_0p05": float(np.mean(vals <= 0.05)),
+        })
+    return pd.DataFrame(rows)
+
+
+def plot_matrix_heatmaps(matrix: pd.DataFrame, out_dir: str):
+    """Plot env x method heatmaps for default-beta matrix cells."""
+    os.makedirs(out_dir, exist_ok=True)
+    default_beta = matrix[matrix["beta"].isna()]
+    if default_beta.empty:
+        return
+    for (variant, npv), sub in default_beta.groupby(["variant", "np"], dropna=False):
+        methods = [m for m in METHOD_ORDER if m in set(sub["method"])]
+        envs = [e for e in ENV_ORDER if e in set(sub["env"])]
+        if not methods or not envs:
+            continue
+        pivot = sub.pivot_table(index="env", columns="method", values="mean", aggfunc="mean")
+        arr = pivot.reindex(index=envs, columns=methods).to_numpy(dtype=float)
+        fig, ax = plt.subplots(figsize=(1.25 * len(methods) + 2.5, 0.55 * len(envs) + 2.0))
+        im = ax.imshow(arr, vmin=0.0, vmax=1.0, cmap="viridis")
+        ax.set_xticks(np.arange(len(methods)))
+        ax.set_xticklabels(methods, rotation=30, ha="right")
+        ax.set_yticks(np.arange(len(envs)))
+        ax.set_yticklabels([e.replace("MiniGrid-", "").replace("-v0", "") for e in envs])
+        title_np = "clean" if pd.isna(npv) else f"noise p={npv}"
+        ax.set_title(f"Final return matrix: {variant}, {title_np}")
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                if np.isfinite(arr[i, j]):
+                    ax.text(j, i, f"{arr[i, j]:.2f}", ha="center", va="center",
+                            color="white" if arr[i, j] < 0.55 else "black", fontsize=8)
+        fig.colorbar(im, ax=ax, label="mean final eval return")
+        fig.tight_layout()
+        safe_np = "clean" if pd.isna(npv) else f"np{str(npv).replace('.', 'p')}"
+        out = os.path.join(out_dir, f"fig_matrix_{variant}_{safe_np}.png")
+        fig.savefig(out, dpi=140)
+        plt.close(fig)
 
 
 def main():
@@ -139,8 +204,14 @@ def main():
     summary = summarize(df)
     plot_curves(summary, a.figures)
     os.makedirs(a.figures, exist_ok=True)
-    final_success_table(df).to_csv(os.path.join(a.figures, "table_final_success.csv"), index=False)
-    print("wrote figures + table_final_success.csv to", a.figures)
+    per_seed = per_seed_final_returns(df)
+    per_seed.to_csv(os.path.join(a.figures, "table_final_by_seed.csv"), index=False)
+    final = final_success_table(df)
+    final.to_csv(os.path.join(a.figures, "table_final_success.csv"), index=False)
+    matrix = matrix_stats_table(per_seed)
+    matrix.to_csv(os.path.join(a.figures, "table_matrix_stats.csv"), index=False)
+    plot_matrix_heatmaps(matrix, a.figures)
+    print("wrote figures + final/matrix tables to", a.figures)
 
 
 if __name__ == "__main__":

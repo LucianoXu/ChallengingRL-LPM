@@ -247,3 +247,32 @@ ours vs. what is upstream.
   values and the `table_tv_fixation.csv` aggregation are unchanged; jitter is seeded
   (`np.random.default_rng(0)`) for reproducibility. Mirrors the per-seed-dot treatment added to the
   MiniGrid report figures (`minigrid_exp/make_report_figs.py`) for visual consistency across the deck.
+
+- **2026-07-09 — MiniWorld hyperparameter-sweep harness.** Added a separate diagnostic sweep layer for
+  the maze reproduction, without changing the paper-faithful `run_grid.py` workflow:
+  1. `Miniworld/experiments/train_maze.py` now exposes common A2C knobs (`--policy-lr`, `--gamma`,
+     `--gae-lambda`, `--value-loss-coef`, `--max-grad-norm`) plus method-specific intrinsic knobs
+     (`--lpm-reward-space`, `--lpm-buffer-size`, `--lpm-update-unc-every`, `--lpm-eta`,
+     `--lpm-pred-lr`, `--lpm-unc-lr`, `--mse-lr`, `--rnd-lr`, `--rnd-emb`, `--icm-lr`,
+     `--icm-beta`). It can also write a per-run JSON config sidecar via `--config-log`.
+  2. `Miniworld/experiments/models.py` forwards hyperparameters through `build_model(...)` and lets
+     LPM prediction/error-model learning rates be overridden while preserving the old defaults
+     (`unc_lr` auto = 1e-3 for log-space LPM, 1e-2 for legacy raw-space LPM).
+  3. New `Miniworld/experiments/run_hparam_sweep.py` writes each config under
+     `expr_data/miniworld/sweeps/<sweep-name>/`, with separate `results/`, `positions/`, `configs/`,
+     `logs/`, and `manifest.csv` outputs. It now has hardcoded presets in `HARD_CODED_SWEEPS`
+     (`smoke`, `lpm_core`) so repeatable sweeps can be launched with a short `--preset ...` command.
+     The `lpm_core` preset uses `jobs=96` and `threads_per_job=1`, matching the 96-run grid to
+     process-level parallelism on the 128-core server while leaving some headroom. New
+     `summarize_hparam_sweep.py` aggregates seed-level and config-level CSV summaries, including
+     noisy-TV action share for `action_noise`.
+  4. Added `docs/miniworld_hyperparameter_sweeps.md` with recommended smoke/full sweep commands and
+     interpretation guidance.
+
+- **2026-07-09 — `../expr1.py` bootstrap script for MiniWorld experiment 1.** Added a top-level
+  convenience launcher for the LPM hyperparameter sweep. `python expr1.py` previews the sweep
+  (`--dry-run` by default), while `python expr1.py --run` launches the hardcoded `lpm_core` preset
+  through `Miniworld/experiments/run_hparam_sweep.py` with server-oriented defaults
+  (`jobs=96`, `threads_per_job=1`). The script delegates to the existing runner rather than
+  duplicating sweep logic, and supports small overrides such as `--steps`, `--seeds`,
+  `--lambda-values`, and `--entropy-values` for smoke launches.

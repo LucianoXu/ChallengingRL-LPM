@@ -17,7 +17,8 @@ def main():
     ap.add_argument("--intrinsic", action="store_true")
     ap.add_argument("--noise", action="store_true")
     ap.add_argument("--method", default="rnd",
-                    choices=["rnd", "lpm", "rnd_lstm", "lpm_lstm", "count", "entropy", "none"])
+                    choices=["rnd", "lpm", "icm", "rnd_lstm", "lpm_lstm",
+                             "icm_lstm", "count", "entropy", "none"])
     ap.add_argument("--beta", type=float, default=None)
     ap.add_argument("--noise-prob", type=float, default=0.10)
     ap.add_argument("--seed", type=int, required=True)

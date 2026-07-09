@@ -2,13 +2,13 @@
 
 A method string carries both the intrinsic-reward kind and the policy
 architecture: a trailing '_lstm' selects a RecurrentPPO LSTM policy, while the
-base ('rnd' / 'lpm') selects the intrinsic-reward wrapper.
+base ('rnd' / 'lpm' / 'icm') selects the intrinsic-reward wrapper.
 """
 
 # Base methods that add an intrinsic reward in the training path. (count is
 # implemented in env_factory but dormant — kept out so existing behavior, where
-# train_one only treats rnd/lpm as intrinsic, is preserved.)
-INTRINSIC_BASES = ("rnd", "lpm")
+# train_one only treats these bases as intrinsic, is preserved.)
+INTRINSIC_BASES = ("rnd", "lpm", "icm")
 
 _LSTM_SUFFIX = "_lstm"
 
