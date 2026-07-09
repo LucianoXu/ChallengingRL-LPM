@@ -49,12 +49,13 @@ def per_seed_finals(env, variant, method, npv=np.nan, frac=0.1):
         vals.append(float(np.mean(returns[-k:])))
     return vals
 
-METHODS = ["none", "entropy", "rnd", "lpm"]
-COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c", "lpm": "#d62728",
-          "rnd_lstm": "#98df8a", "lpm_lstm": "#ff9896"}
+METHODS = ["none", "entropy", "rnd", "icm", "lpm"]
+COLORS = {"none": "#888888", "entropy": "#1f77b4", "rnd": "#2ca02c",
+          "icm": "#9467bd", "lpm": "#d62728",
+          "rnd_lstm": "#98df8a", "icm_lstm": "#c5b0d5", "lpm_lstm": "#ff9896"}
 # Display labels: uppercase acronyms so "rnd" isn't misread as "md" at small sizes.
-LBL = {"none": "none", "entropy": "entropy", "rnd": "RND", "lpm": "LPM",
-       "rnd_lstm": "RND+LSTM", "lpm_lstm": "LPM+LSTM"}
+LBL = {"none": "none", "entropy": "entropy", "rnd": "RND", "icm": "ICM", "lpm": "LPM",
+       "rnd_lstm": "RND+LSTM", "icm_lstm": "ICM+LSTM", "lpm_lstm": "LPM+LSTM"}
 
 # Theoretical-max eval return = 1 - 0.9*E[optimal_steps]/max_steps, from an exact
 # BFS solver over 300 random layouts (see optimal_reward.py). This is the ceiling a
@@ -80,14 +81,14 @@ def fig_ladder():
             ("MiniGrid-FourRooms-v0", "medium\nFourRooms"),
             ("MiniGrid-MultiRoom-N6-v0", "hard\nMultiRoom-N6")]
     fig, ax = plt.subplots(figsize=(8, 4.3))
-    x = np.arange(len(envs)); w = 0.2
+    x = np.arange(len(envs)); w = 0.16
     for i, m in enumerate(METHODS):
         var = "intrinsic_no_noise" if is_intrinsic(m) else "baseline_no_noise"
         means, stds = [], []
         for env, _ in envs:
             mu, sd = cell(env, var, m)
             means.append(mu); stds.append(sd)
-        xpos = x + (i - 1.5) * w
+        xpos = x + (i - (len(METHODS) - 1) / 2) * w
         ax.bar(xpos, means, w, yerr=stds, capsize=2, label=LBL[m],
                color=COLORS[m], alpha=0.85, zorder=1)
         # Overlay per-seed final returns (same windowed definition as the bars).
@@ -110,7 +111,7 @@ def fig_ladder():
     ax.set_title("Difficulty ladder (clean): intrinsic motivation is difficulty-gated\n"
                  "(bars = mean$\\pm$std; dots = per-seed finals; DoorKey 8 seeds, others 3)",
                  fontsize=10)
-    ax.legend(ncol=4, fontsize=8, loc="upper right")
+    ax.legend(ncol=5, fontsize=8, loc="upper right")
     ax.set_ylim(0, 1.18)
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "fig1_difficulty_ladder.png"), dpi=140)
     plt.close(fig)
@@ -212,9 +213,9 @@ def fig_fourrooms_noise():
 # --- Fig 6 left: FourRooms clean vs noisy@0.1 bars (DoorKey-style snapshot) ---
 def fig_fourrooms_noise_bars():
     """The DoorKey-style clean-vs-noisy bar comparison, recomputed on FourRooms:
-    4 methods, clean vs noisy@0.1, mean+/-std with per-seed dots. Honest snapshot
-    (no retained-% annotation): every method loses ground, none/entropy/LPM land
-    together while RND lands lowest. Companion to the full sweep."""
+    methods, clean vs noisy@0.1, mean+/-std with per-seed dots. Honest snapshot
+    (no retained-% annotation): every method loses ground; compare method clusters
+    against the full sweep before making robustness claims."""
     env = "MiniGrid-FourRooms-v0"
     cvar = lambda m: "intrinsic_no_noise" if is_intrinsic(m) else "baseline_no_noise"
     nvar = lambda m: "intrinsic_noise" if is_intrinsic(m) else "baseline_noise"

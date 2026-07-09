@@ -71,6 +71,14 @@ LPM_REWARD_SCALE = 0.001
 LPM_LEARNING_RATE = 1e-3
 LPM_HIDDEN_DIM = 128
 LPM_BUFFER_SIZE = 100
+# ICM (Pathak et al. 2017): intrinsic reward is forward prediction error in a
+# learned inverse-dynamics feature space. Start with RND's reward scale because
+# both are prediction-error bonuses; sweep beta per method before claiming parity.
+ICM_REWARD_SCALE = 0.005
+ICM_LEARNING_RATE = 1e-3
+ICM_HIDDEN_DIM = 128
+ICM_FEATURE_DIM = 128
+ICM_FORWARD_LOSS_WEIGHT = 0.2
 # PPO entropy-coefficient for the non-intrinsic "entropy" exploration arm
 # (exploration via policy stochasticity; no reward shaping). none-arm uses 0.0.
 ENTROPY_COEF = 0.01

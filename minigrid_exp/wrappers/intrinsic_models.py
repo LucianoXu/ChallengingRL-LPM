@@ -175,9 +175,88 @@ class SharedLPMModel(_SharedBase):
         return {"fwd_loss": fwd_last, "err_loss": err_last}
 
 
-def build_shared_model(method, obs_dim, num_actions, reward_scale, device="cpu", seed=None):
+class SharedICMModel(_SharedBase):
+    """Intrinsic Curiosity Module for the shared PPO vector-wrapper path.
+
+    Reward is forward-model prediction error in inverse-dynamics feature space:
+    mean((phi(next_obs) - f(phi(prev_obs), action))^2).
+    """
+
+    def __init__(self, obs_dim, num_actions, reward_scale, learning_rate=1e-3,
+                 hidden_dim=128, feature_dim=128, forward_loss_weight=0.2,
+                 normalize_observations=True, normalize_rewards=True,
+                 observation_clip=5.0, train_epochs=4, train_batch=256,
+                 device="cpu", seed=None):
+        super().__init__(obs_dim, reward_scale, normalize_observations,
+                         normalize_rewards, observation_clip, train_epochs,
+                         train_batch, device, seed)
+        self.num_actions = int(num_actions)
+        self.forward_loss_weight = float(forward_loss_weight)
+        self.encoder = _MLP(self.obs_dim, hidden_dim, feature_dim).to(self.device)
+        self.forward_model = _MLP(feature_dim + self.num_actions, hidden_dim, feature_dim).to(self.device)
+        self.inverse_model = _MLP(2 * feature_dim, hidden_dim, self.num_actions).to(self.device)
+        params = (list(self.encoder.parameters()) + list(self.forward_model.parameters())
+                  + list(self.inverse_model.parameters()))
+        self.opt = th.optim.Adam(params, lr=learning_rate)
+        self._rollout = []  # (norm_prev:(obs_dim,), action:int, norm_next:(obs_dim,))
+
+    def _action_one_hot(self, actions):
+        a = np.zeros((len(actions), self.num_actions), dtype=np.float32)
+        a[np.arange(len(actions)), np.asarray(actions, dtype=int)] = 1.0
+        return th.as_tensor(a, dtype=th.float32, device=self.device)
+
+    def reward(self, prev_obs, actions, next_obs):
+        prev = np.asarray(prev_obs, dtype=np.float32)
+        nxt = np.asarray(next_obs, dtype=np.float32)
+        actions = np.asarray(actions, dtype=int)
+        self.obs_rms.update(nxt)
+        nprev = self._normalize_obs(prev)
+        nnext = self._normalize_obs(nxt)
+        pt = th.as_tensor(nprev, dtype=th.float32, device=self.device)
+        nt = th.as_tensor(nnext, dtype=th.float32, device=self.device)
+        ah = self._action_one_hot(actions)
+        with th.no_grad():
+            phi_prev = self.encoder(pt)
+            phi_next = self.encoder(nt)
+            pred_next = self.forward_model(th.cat([phi_prev, ah], dim=1))
+            raw = ((pred_next - phi_next) ** 2).mean(dim=1).cpu().numpy()
+        for i in range(prev.shape[0]):
+            self._rollout.append((nprev[i], int(actions[i]), nnext[i]))
+        bonus = self._normalize_reward(raw.astype(np.float64))
+        return (self.reward_scale * bonus).astype(np.float32)
+
+    def update(self):
+        if not self._rollout:
+            return {"fwd_loss": 0.0, "inv_loss": 0.0}
+        bs = np.stack([r[0] for r in self._rollout])
+        ba = np.array([r[1] for r in self._rollout], dtype=int)
+        bn = np.stack([r[2] for r in self._rollout])
+        self._rollout = []
+        st = th.as_tensor(bs, dtype=th.float32, device=self.device)
+        nt = th.as_tensor(bn, dtype=th.float32, device=self.device)
+        at = th.as_tensor(ba, dtype=th.long, device=self.device)
+        ah = self._action_one_hot(ba)
+        fwd_last = inv_last = 0.0
+        for mb in self._minibatches(bs.shape[0]):
+            phi_prev = self.encoder(st[mb])
+            phi_next = self.encoder(nt[mb])
+            inv_logits = self.inverse_model(th.cat([phi_prev, phi_next], dim=1))
+            inv_loss = th.nn.functional.cross_entropy(inv_logits, at[mb])
+            pred_next = self.forward_model(th.cat([phi_prev, ah[mb]], dim=1))
+            fwd_loss = ((pred_next - phi_next.detach()) ** 2).mean()
+            loss = ((1.0 - self.forward_loss_weight) * inv_loss
+                    + self.forward_loss_weight * fwd_loss)
+            self.opt.zero_grad(); loss.backward(); self.opt.step()
+            fwd_last = float(fwd_loss.item())
+            inv_last = float(inv_loss.item())
+        return {"fwd_loss": fwd_last, "inv_loss": inv_last}
+
+
+def build_shared_model(method, obs_dim, num_actions, reward_scale, device="cpu", seed=None, **kwargs):
     if method == "rnd":
-        return SharedRNDModel(obs_dim, num_actions, reward_scale, device=device, seed=seed)
+        return SharedRNDModel(obs_dim, num_actions, reward_scale, device=device, seed=seed, **kwargs)
     if method == "lpm":
-        return SharedLPMModel(obs_dim, num_actions, reward_scale, device=device, seed=seed)
+        return SharedLPMModel(obs_dim, num_actions, reward_scale, device=device, seed=seed, **kwargs)
+    if method == "icm":
+        return SharedICMModel(obs_dim, num_actions, reward_scale, device=device, seed=seed, **kwargs)
     raise ValueError(f"build_shared_model: unsupported method {method!r}")

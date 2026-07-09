@@ -2,7 +2,7 @@
 
 Single source of truth shared by `gif_gallery.py` (rendering) and
 `make_stage_snapshots.py` (optional clean re-training). The full matrix is
-3 envs x {clean, noisy} x {none, entropy, rnd, lpm} = 24 configs, each rendered
+3 envs x {clean, noisy} x {none, entropy, rnd, icm, lpm} = 30 configs, each rendered
 at three stages (untrained / mid / final) sourced from existing on-disk
 checkpoints. Cells without a final model on disk are skipped automatically.
 
@@ -27,7 +27,7 @@ ENVS = {
     "fourrooms":    ("MiniGrid-FourRooms-v0",    "medium"),
     "multiroom-n6": ("MiniGrid-MultiRoom-N6-v0", "hard"),
 }
-METHODS = ["none", "entropy", "rnd", "lpm"]
+METHODS = ["none", "entropy", "rnd", "icm", "lpm"]
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class GifConfig:
 
     @property
     def intrinsic(self) -> bool:
-        return self.method in ("rnd", "lpm")
+        return self.method in ("rnd", "icm", "lpm")
 
     @property
     def variant(self) -> str:

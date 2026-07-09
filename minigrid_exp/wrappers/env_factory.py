@@ -14,6 +14,11 @@ from config import (
     DQN_KEY_PICKUP_BONUS,
     DQN_RESTRICT_ACTIONS,
     DQN_USE_FLAT_OBS,
+    ICM_FEATURE_DIM,
+    ICM_FORWARD_LOSS_WEIGHT,
+    ICM_HIDDEN_DIM,
+    ICM_LEARNING_RATE,
+    ICM_REWARD_SCALE,
     LPM_BUFFER_SIZE,
     LPM_HIDDEN_DIM,
     LPM_LEARNING_RATE,
@@ -32,6 +37,7 @@ from config import (
 from wrappers.noise_wrapper import ObservationNoiseWrapper
 from wrappers.rnd_wrapper import RNDIntrinsicRewardWrapper
 from wrappers.lpm_wrapper import LPMIntrinsicRewardWrapper
+from wrappers.icm_wrapper import ICMIntrinsicRewardWrapper
 from wrappers.count_wrapper import CountBasedExplorationWrapper
 from wrappers.reward_split_wrapper import EpisodeRewardSplitWrapper
 from method_utils import base_intrinsic
@@ -160,7 +166,7 @@ def make_env(
     # NOTE: the intrinsic wrapper is applied here, BEFORE MiniGridActionSubsetWrapper
     # (added further below). So the intrinsic wrappers see the FULL MiniGrid action
     # space (Discrete(7)) at construction, and receive the *mapped base* action in
-    # step(). The LPM wrapper therefore one-hots the base-action space (num_actions=7),
+    # step(). Dynamics wrappers therefore one-hot the base-action space (num_actions=7),
     # not the policy's reduced subset — intentional and in-range; do not assume
     # num_actions matches the agent's action_space.n.
     if training and intrinsic:
@@ -185,6 +191,20 @@ def make_env(
                 learning_rate=LPM_LEARNING_RATE,
                 hidden_dim=LPM_HIDDEN_DIM,
                 buffer_size=LPM_BUFFER_SIZE,
+                normalize_observations=RND_NORMALIZE_OBSERVATIONS,
+                normalize_rewards=RND_NORMALIZE_REWARDS,
+                observation_clip=RND_OBSERVATION_CLIP,
+                device=RND_DEVICE,
+                seed=seed,
+            )
+        elif base == "icm":
+            env = ICMIntrinsicRewardWrapper(
+                env,
+                reward_scale=ICM_REWARD_SCALE if beta is None else beta,
+                learning_rate=ICM_LEARNING_RATE,
+                hidden_dim=ICM_HIDDEN_DIM,
+                feature_dim=ICM_FEATURE_DIM,
+                forward_loss_weight=ICM_FORWARD_LOSS_WEIGHT,
                 normalize_observations=RND_NORMALIZE_OBSERVATIONS,
                 normalize_rewards=RND_NORMALIZE_REWARDS,
                 observation_clip=RND_OBSERVATION_CLIP,

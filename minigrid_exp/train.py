@@ -78,9 +78,18 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
     from method_utils import base_intrinsic, is_intrinsic
     from wrappers.intrinsic_models import build_shared_model
     from wrappers.intrinsic_vec_wrapper import IntrinsicVecWrapper
-    from config import LPM_REWARD_SCALE, RND_REWARD_SCALE, RND_DEVICE
+    from config import (
+        ICM_FEATURE_DIM,
+        ICM_FORWARD_LOSS_WEIGHT,
+        ICM_HIDDEN_DIM,
+        ICM_LEARNING_RATE,
+        ICM_REWARD_SCALE,
+        LPM_REWARD_SCALE,
+        RND_DEVICE,
+        RND_REWARD_SCALE,
+    )
 
-    # rnd/lpm intrinsic is handled by ONE shared IntrinsicVecWrapper over the
+    # RND/LPM/ICM intrinsic is handled by ONE shared IntrinsicVecWrapper over the
     # whole VecEnv (single model, per-rollout update). So the per-env envs are
     # built WITHOUT their own intrinsic wrapper. count (dormant) still goes per-env.
     vec_handled = bool(training and intrinsic and is_intrinsic(method))
@@ -115,11 +124,24 @@ def make_vector_env(env_id, intrinsic, noise, seed, training, n_envs, log_dir, r
 
     if vec_handled:
         base = base_intrinsic(method)
-        scale = (LPM_REWARD_SCALE if base == "lpm" else RND_REWARD_SCALE) if beta is None else beta
+        default_scales = {
+            "rnd": RND_REWARD_SCALE,
+            "lpm": LPM_REWARD_SCALE,
+            "icm": ICM_REWARD_SCALE,
+        }
+        scale = default_scales[base] if beta is None else beta
+        model_kwargs = {}
+        if base == "icm":
+            model_kwargs = {
+                "learning_rate": ICM_LEARNING_RATE,
+                "hidden_dim": ICM_HIDDEN_DIM,
+                "feature_dim": ICM_FEATURE_DIM,
+                "forward_loss_weight": ICM_FORWARD_LOSS_WEIGHT,
+            }
         model = build_shared_model(
             base, obs_dim=env.observation_space.shape[0],
             num_actions=env.action_space.n, reward_scale=scale,
-            device=RND_DEVICE, seed=seed)
+            device=RND_DEVICE, seed=seed, **model_kwargs)
         env = IntrinsicVecWrapper(env, model, n_steps=PPO_HYPERPARAMS["n_steps"])
 
     if log_dir is not None:

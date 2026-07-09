@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from wrappers.intrinsic_models import SharedRNDModel, SharedLPMModel, build_shared_model
+from wrappers.intrinsic_models import SharedRNDModel, SharedLPMModel, SharedICMModel, build_shared_model
 
 OBS, ACT, B = 12, 3, 4
 
@@ -55,6 +55,17 @@ def test_lpm_update_returns_losses():
     assert "fwd_loss" in d and "err_loss" in d
 
 
+def test_icm_reward_shape_and_update_losses():
+    m = SharedICMModel(OBS, ACT, reward_scale=1.0, train_epochs=2, train_batch=4, seed=0)
+    rng = np.random.default_rng(4)
+    r = m.reward(_obs(rng), rng.integers(0, ACT, B), _obs(rng))
+    assert r.shape == (B,)
+    assert np.all(np.isfinite(r))
+    d = m.update()
+    assert "fwd_loss" in d and "inv_loss" in d
+
+
 def test_build_shared_model_dispatch():
     assert isinstance(build_shared_model("rnd", OBS, ACT, 0.01), SharedRNDModel)
     assert isinstance(build_shared_model("lpm", OBS, ACT, 0.01), SharedLPMModel)
+    assert isinstance(build_shared_model("icm", OBS, ACT, 0.01), SharedICMModel)

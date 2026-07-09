@@ -317,7 +317,7 @@ def write_readme(results: dict):
         "training stages per config. See "
         "`docs/superpowers/specs/2026-06-23-minigrid-trajectory-gifs-design.md`.",
         "",
-        "Full matrix: 3 envs × {clean, noisy} × {none, entropy, rnd, lpm}. "
+        "Full matrix: 3 envs x {clean, noisy} x {none, entropy, rnd, icm, lpm}. "
         "Each config dir holds `untrained.gif`, `mid.gif`, `final.gif` and a "
         "3-stage `strip.gif`.",
         "",

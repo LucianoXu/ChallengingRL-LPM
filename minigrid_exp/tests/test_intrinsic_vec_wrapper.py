@@ -54,6 +54,14 @@ def test_reward_is_extrinsic_plus_intrinsic():
     assert rews.shape == (2,) and np.all(np.isfinite(rews))
 
 
+def test_icm_shared_wrapper_reward_is_finite():
+    w, _ = _wrap("icm", n_steps=4)
+    w.reset()
+    w.step_async(np.array([w.action_space.sample() for _ in range(2)]))
+    _, rews, _, _ = w.step_wait()
+    assert rews.shape == (2,) and np.all(np.isfinite(rews))
+
+
 def test_make_vector_env_uses_shared_wrapper():
     import train
     from config import PPO_HYPERPARAMS
