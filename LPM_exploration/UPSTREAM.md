@@ -276,3 +276,12 @@ ours vs. what is upstream.
   (`jobs=96`, `threads_per_job=1`). The script delegates to the existing runner rather than
   duplicating sweep logic, and supports small overrides such as `--steps`, `--seeds`,
   `--lambda-values`, and `--entropy-values` for smoke launches.
+
+- **2026-07-09 — `Miniworld/experiments/train_maze.py` config-log JSON fix.** The
+  config-logging block added in `59aef0c` crashed on its first-ever run with
+  `TypeError: Object of type int64 is not JSON serializable`: `num_actions =
+  env.action_space.n` is a numpy `int64` (gymnasium `Discrete.n`), which `json.dump`
+  cannot serialize (true under both numpy 1.x and 2.x — the sweep had never completed
+  a cell, so the bug went unnoticed). Fixed by passing `default=lambda o: o.item() if
+  hasattr(o, "item") else str(o)` to `json.dump` so any numpy scalar is coerced to a
+  native Python type. Marked inline with a `# local fix:` comment.
