@@ -45,6 +45,38 @@ For a tiny real smoke launch through the same bootstrap path:
 python expr1.py --run --steps 512 --seeds 1 --lambda-values 0.3 1.0 --entropy-values 0.03 --jobs 1 --max-runs 2
 ```
 
+After summarizing experiment 1, validate the best candidates with:
+
+```bash
+python expr2.py
+```
+
+By default this previews the validation plan. It reads
+`expr_data/miniworld/sweeps/expr1_lpm_core_action_noise/summary/leaderboard.csv`,
+selects the top 3 configs exactly, and plans 64 fresh validation seeds
+(`9..72`) for each. Launch it with:
+
+```bash
+python expr2.py --run
+```
+
+The validation output goes to
+`expr_data/miniworld/sweeps/expr2_lpm_top3_action_noise_64seed/` and is
+summarized automatically after successful completion. To only summarize an
+existing validation folder:
+
+```bash
+python expr2.py --summarize-only
+```
+
+Useful overrides:
+
+```bash
+python expr2.py --top-k 5 --seed-start 101 --seed-count 64
+python expr2.py --run --steps 512 --seed-count 2 --jobs 1 --max-runs 3
+python expr2.py --run --python ./LPM_exploration/.venv/bin/python
+```
+
 Start with a dry run:
 
 ```bash
