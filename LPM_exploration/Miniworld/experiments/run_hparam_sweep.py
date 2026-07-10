@@ -321,7 +321,11 @@ def _write_configs(root, configs):
 def _run_one(run, base_env, threads):
     env = dict(base_env)
     for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
-              "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+              "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+              # local fix: pin Mesa llvmpipe's software-GL render pool too, else
+              # each headless job spawns ~1 thread/core (~32) and N jobs oversubscribe
+              # the box (load >200, ~4x slower). See UPSTREAM.md 2026-07-09.
+              "LP_NUM_THREADS"):
         env[k] = str(threads)
     os.makedirs(os.path.dirname(run["log_path"]), exist_ok=True)
     with open(run["log_path"], "w", encoding="utf-8") as out:
