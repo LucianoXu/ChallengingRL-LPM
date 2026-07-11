@@ -1,7 +1,10 @@
-"""Aggregate MiniGrid runs -> sample-efficiency curves + final-success table.
+"""Aggregate MiniGrid runs into reusable result tables.
 
-Reads SB3 EvalCallback outputs under expr_data/minigrid/logs/<algo>/eval/<run>/<chunk>/
-and writes figures + a summary CSV under expr_data/minigrid/figures/.
+Reads SB3 EvalCallback outputs under
+expr_data/minigrid/results/logs/<algo>/eval/<run>/<chunk>/
+and writes summary CSVs under expr_data/minigrid/figures/. Legacy diagnostic
+plots are available behind ``--diagnostics``; report-ready figures are produced
+by ``reports/make_publication_figures.py``.
 
 Each run may have one or more chunk dirs named c0, c300000, c600000, ... The
 per-chunk timesteps are already global (reset_num_timesteps=False after c0), so
@@ -196,13 +199,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--logs", default=str(config.LOGS_DIR))
     ap.add_argument("--figures", default=str(config.EXPR_DATA / "figures"))
+    ap.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="also write the legacy all-config curves and matrix heatmaps",
+    )
     a = ap.parse_args()
     df = aggregate_eval_curves(a.logs)
     if df.empty:
         print("no eval data found under", a.logs); return
     print(f"loaded {len(df)} eval rows")
     summary = summarize(df)
-    plot_curves(summary, a.figures)
     os.makedirs(a.figures, exist_ok=True)
     per_seed = per_seed_final_returns(df)
     per_seed.to_csv(os.path.join(a.figures, "table_final_by_seed.csv"), index=False)
@@ -210,8 +217,12 @@ def main():
     final.to_csv(os.path.join(a.figures, "table_final_success.csv"), index=False)
     matrix = matrix_stats_table(per_seed)
     matrix.to_csv(os.path.join(a.figures, "table_matrix_stats.csv"), index=False)
-    plot_matrix_heatmaps(matrix, a.figures)
-    print("wrote figures + final/matrix tables to", a.figures)
+    if a.diagnostics:
+        plot_curves(summary, a.figures)
+        plot_matrix_heatmaps(matrix, a.figures)
+    print("wrote final/matrix tables to", a.figures)
+    if not a.diagnostics:
+        print("publication figures: python reports/make_publication_figures.py --domain minigrid")
 
 
 if __name__ == "__main__":

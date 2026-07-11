@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent
 EXP = ROOT / "minigrid_exp"
 RUNNER = EXP / "run_grid.py"
 ANALYZER = EXP / "analyze.py"
-MODEL_DIR = ROOT / "expr_data" / "minigrid" / "results" / "models" / "ppo"
+DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp4"
 
 FOURROOMS = "MiniGrid-FourRooms-v0"
 MULTIROOM = "MiniGrid-MultiRoom-N6-v0"
@@ -83,8 +83,12 @@ def _run_name(env_id: str, variant: str, method: str, seed: int,
     return f"{env_id}__{variant}__{method}__seed_{seed}{suffix}".replace("/", "_")
 
 
-def _progress(run_name: str) -> int:
-    sidecar = MODEL_DIR / f"{run_name}.progress"
+def _output_dir(args: argparse.Namespace) -> Path:
+    return Path(args.output_dir).expanduser().resolve()
+
+
+def _progress(run_name: str, args: argparse.Namespace) -> int:
+    sidecar = _output_dir(args) / "results" / "models" / "ppo" / f"{run_name}.progress"
     if not sidecar.exists():
         return 0
     try:
@@ -159,8 +163,11 @@ def _expected_cells(specs: list[SweepSpec], seeds: list[int]) -> list[dict]:
     return cells
 
 
-def _incomplete(cells: list[dict]) -> list[dict]:
-    return [cell for cell in cells if _progress(cell["run_name"]) < cell["steps"]]
+def _incomplete(cells: list[dict], args: argparse.Namespace) -> list[dict]:
+    return [
+        cell for cell in cells
+        if _progress(cell["run_name"], args) < cell["steps"]
+    ]
 
 
 def _runner_cmd(spec: SweepSpec, args: argparse.Namespace, dry_run: bool) -> list[str]:
@@ -191,6 +198,7 @@ def _base_env(args: argparse.Namespace) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(EXP) + os.pathsep + env.get("PYTHONPATH", "")
     env["MINIGRID_PYTHON"] = py
+    env["MINIGRID_EXPR_DATA"] = str(_output_dir(args))
     env.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     return env
 
@@ -210,11 +218,12 @@ def _analyze(args: argparse.Namespace) -> int:
 
 
 def _print_plan(specs: list[SweepSpec], cells: list[dict], args: argparse.Namespace) -> None:
-    pending = _incomplete(cells)
+    pending = _incomplete(cells, args)
     print("[expr4] MiniGrid hyperparameter sweeps")
     print(f"[expr4] sweeps: {', '.join(args.sweeps)}")
     print(f"[expr4] methods: {', '.join(args.methods)}")
     print(f"[expr4] seeds: {', '.join(str(s) for s in args.seeds)}")
+    print(f"[expr4] output: {_output_dir(args)}")
     print(f"[expr4] beta values: {', '.join(f'{b:g}' for b in args.beta_values)}")
     print(f"[expr4] FourRooms noise probs: {', '.join(f'{p:g}' for p in args.noise_probs)}")
     print("[expr4] specs:")
@@ -233,7 +242,7 @@ def _print_plan(specs: list[SweepSpec], cells: list[dict], args: argparse.Namesp
     if pending:
         print("[expr4] first pending cells:")
         for cell in pending[: args.preview_cells]:
-            done = _progress(cell["run_name"])
+            done = _progress(cell["run_name"], args)
             print(f"  {cell['run_name']} ({done:,}/{cell['steps']:,})")
         if len(pending) > args.preview_cells:
             print(f"  ... {len(pending) - args.preview_cells} more")
@@ -249,6 +258,9 @@ def main() -> int:
                     help="do not run analyze.py after completion")
     ap.add_argument("--python", dest="python_path",
                     help="Python executable for run_grid.py, train_one.py, and analyze.py")
+    ap.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
+                    help="experiment root containing results/ and figures/ "
+                         "(default: expr_data/minigrid/exp4)")
     ap.add_argument("--sweeps", nargs="+", choices=["beta", "noise"],
                     default=["beta", "noise"])
     ap.add_argument("--methods", nargs="+", default=list(DEFAULT_METHODS),
@@ -288,7 +300,7 @@ def main() -> int:
 
     max_rounds = args.rounds or max(math.ceil(spec.steps / args.chunk_steps) for spec in specs)
     for round_idx in range(1, max_rounds + 1):
-        pending = _incomplete(cells)
+        pending = _incomplete(cells, args)
         if not pending:
             print("[expr4] all cells complete")
             break
@@ -302,7 +314,7 @@ def main() -> int:
             if rc != 0:
                 return rc
 
-    pending = _incomplete(cells)
+    pending = _incomplete(cells, args)
     if pending:
         print(f"[expr4] stopped with {len(pending)} incomplete cells")
         print("[expr4] rerun the same command later to resume")

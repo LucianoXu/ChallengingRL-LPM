@@ -14,7 +14,6 @@ import itertools
 import os
 import subprocess
 import sys
-import tempfile
 # ThreadPoolExecutor (not ProcessPoolExecutor): run_cell only blocks on
 # subprocess.run, so threads give identical parallelism (the real work is in the
 # child processes) without multiprocessing's fork/resource-tracker fragility,
@@ -29,7 +28,7 @@ PY = os.environ.get("MINIGRID_PYTHON", _DEFAULT_PY if os.path.exists(_DEFAULT_PY
 
 # (variant_name, intrinsic, noise)
 VARIANTS = [(v["name"], v["intrinsic"], v["noise"]) for v in config.VARIANTS]
-LOG_DIR = os.path.join(tempfile.gettempdir(), "minigrid_logs")
+LOG_DIR = os.path.join(config.RESULTS_DIR, "runner_logs")
 
 
 def cell_complete(env_id, variant, method, seed, tag, total_steps):

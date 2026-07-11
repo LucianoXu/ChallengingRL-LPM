@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent
 EXP = ROOT / "minigrid_exp"
 RUNNER = EXP / "run_grid.py"
 ANALYZER = EXP / "analyze.py"
-MODEL_DIR = ROOT / "expr_data" / "minigrid" / "results" / "models" / "ppo"
+DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp3"
 
 ENV_BUDGETS = {
     "MiniGrid-DoorKey-5x5-v0": 1_000_000,
@@ -52,7 +52,8 @@ INTRINSIC_METHODS = ["rnd", "lpm", "icm"]
 NOISE_VARIANTS = {"baseline_noise", "intrinsic_noise"}
 
 
-def _load_minigrid_config():
+def _load_minigrid_config(args: argparse.Namespace):
+    os.environ["MINIGRID_EXPR_DATA"] = str(_output_dir(args))
     sys.path.insert(0, str(EXP))
     import config  # noqa: WPS433
     return config
@@ -97,8 +98,12 @@ def _run_name(env_id: str, variant: str, method: str, seed: int,
     return f"{env_id}__{variant}__{method}__seed_{seed}{suffix}".replace("/", "_")
 
 
-def _progress(run_name: str) -> int:
-    sidecar = MODEL_DIR / f"{run_name}.progress"
+def _output_dir(args: argparse.Namespace) -> Path:
+    return Path(args.output_dir).expanduser().resolve()
+
+
+def _progress(run_name: str, args: argparse.Namespace) -> int:
+    sidecar = _output_dir(args) / "results" / "models" / "ppo" / f"{run_name}.progress"
     if not sidecar.exists():
         return 0
     try:
@@ -135,8 +140,11 @@ def _expected_cells(args: argparse.Namespace, env_steps: dict[str, int]) -> list
     return cells
 
 
-def _incomplete(cells: list[dict]) -> list[dict]:
-    return [cell for cell in cells if _progress(cell["run_name"]) < cell["steps"]]
+def _incomplete(cells: list[dict], args: argparse.Namespace) -> list[dict]:
+    return [
+        cell for cell in cells
+        if _progress(cell["run_name"], args) < cell["steps"]
+    ]
 
 
 def _runner_cmd(args: argparse.Namespace, env_id: str, steps: int, dry_run: bool) -> list[str]:
@@ -168,6 +176,7 @@ def _base_env(args: argparse.Namespace) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(EXP) + os.pathsep + env.get("PYTHONPATH", "")
     env["MINIGRID_PYTHON"] = py
+    env["MINIGRID_EXPR_DATA"] = str(_output_dir(args))
     env.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     return env
 
@@ -187,13 +196,14 @@ def _analyze(args: argparse.Namespace) -> int:
 
 
 def _print_plan(args: argparse.Namespace, env_steps: dict[str, int], cells: list[dict]) -> None:
-    cfg = _load_minigrid_config()
+    cfg = _load_minigrid_config(args)
     variants = args.variants or DEFAULT_VARIANTS
     print("[expr3] MiniGrid full matrix")
     print(f"[expr3] envs: {', '.join(env_steps)}")
     print(f"[expr3] variants: {', '.join(variants)}")
     print(f"[expr3] visible methods: {', '.join(BASELINE_METHODS + args.methods)}")
     print(f"[expr3] seeds: {', '.join(str(s) for s in args.seeds)}")
+    print(f"[expr3] output: {_output_dir(args)}")
     print(f"[expr3] noise probs: {', '.join(str(p) for p in args.noise_probs)}")
     print("[expr3] budgets:")
     for env_id, steps in env_steps.items():
@@ -216,12 +226,12 @@ def _print_plan(args: argparse.Namespace, env_steps: dict[str, int], cells: list
         f"hidden={cfg.ICM_HIDDEN_DIM}, feature={cfg.ICM_FEATURE_DIM}, "
         f"forward_loss_weight={cfg.ICM_FORWARD_LOSS_WEIGHT}"
     )
-    pending = _incomplete(cells)
+    pending = _incomplete(cells, args)
     print(f"[expr3] cells total: {len(cells)}, pending: {len(pending)}")
     if pending:
         print("[expr3] first pending cells:")
         for cell in pending[: args.preview_cells]:
-            done = _progress(cell["run_name"])
+            done = _progress(cell["run_name"], args)
             print(f"  {cell['run_name']} ({done:,}/{cell['steps']:,})")
         if len(pending) > args.preview_cells:
             print(f"  ... {len(pending) - args.preview_cells} more")
@@ -237,6 +247,9 @@ def main() -> int:
                     help="do not run analyze.py after completion")
     ap.add_argument("--python", dest="python_path",
                     help="Python executable for run_grid.py, train_one.py, and analyze.py")
+    ap.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
+                    help="experiment root containing results/ and figures/ "
+                         "(default: expr_data/minigrid/exp3)")
     ap.add_argument("--envs", nargs="+", choices=sorted(ENV_BUDGETS),
                     help="restrict to specific MiniGrid env ids")
     ap.add_argument("--variants", nargs="+", choices=DEFAULT_VARIANTS,
@@ -281,7 +294,7 @@ def main() -> int:
     max_rounds = args.rounds or max(
         math.ceil(steps / args.chunk_steps) for steps in env_steps.values())
     for round_idx in range(1, max_rounds + 1):
-        pending = _incomplete(cells)
+        pending = _incomplete(cells, args)
         if not pending:
             print("[expr3] all cells complete")
             break
@@ -293,7 +306,7 @@ def main() -> int:
             if rc != 0:
                 return rc
 
-    pending = _incomplete(cells)
+    pending = _incomplete(cells, args)
     if pending:
         print(f"[expr3] stopped with {len(pending)} incomplete cells")
         print("[expr3] rerun the same command later to resume")

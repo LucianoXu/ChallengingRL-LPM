@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
-EXPR_DATA = REPO_ROOT / "expr_data" / "minigrid"
+DEFAULT_EXPR_DATA = REPO_ROOT / "expr_data" / "minigrid"
+EXPR_DATA = Path(os.environ.get("MINIGRID_EXPR_DATA", DEFAULT_EXPR_DATA)).expanduser().resolve()
 
 RESULTS_DIR = EXPR_DATA / "results"
 
