@@ -38,6 +38,44 @@ class _SharedBase:
         self.obs_rms = RunningMeanStd(shape=(self.obs_dim,))
         self.reward_rms = RunningMeanStd(shape=())
 
+    @staticmethod
+    def _rms_state(rms):
+        return {
+            "mean": np.array(rms.mean, copy=True),
+            "var": np.array(rms.var, copy=True),
+            "count": float(rms.count),
+        }
+
+    @staticmethod
+    def _load_rms_state(rms, state):
+        rms.mean = np.array(state["mean"], dtype=np.float64, copy=True)
+        rms.var = np.array(state["var"], dtype=np.float64, copy=True)
+        rms.count = float(state["count"])
+
+    def _base_state_dict(self):
+        return {
+            "version": 1,
+            "obs_dim": self.obs_dim,
+            "reward_scale": self.reward_scale,
+            "obs_rms": self._rms_state(self.obs_rms),
+            "reward_rms": self._rms_state(self.reward_rms),
+        }
+
+    def _load_base_state_dict(self, state):
+        if state.get("version") != 1:
+            raise ValueError(f"Unsupported intrinsic checkpoint version: {state.get('version')!r}")
+        if int(state["obs_dim"]) != self.obs_dim:
+            raise ValueError(
+                f"Intrinsic checkpoint obs_dim={state['obs_dim']} does not match {self.obs_dim}"
+            )
+        if not np.isclose(float(state["reward_scale"]), self.reward_scale):
+            raise ValueError(
+                "Intrinsic checkpoint reward scale does not match the requested run: "
+                f"{state['reward_scale']} != {self.reward_scale}"
+            )
+        self._load_rms_state(self.obs_rms, state["obs_rms"])
+        self._load_rms_state(self.reward_rms, state["reward_rms"])
+
     def _normalize_obs(self, flat):  # flat: (B, obs_dim) float32
         if not self.normalize_observations:
             return flat.astype(np.float32)
@@ -72,6 +110,27 @@ class SharedRNDModel(_SharedBase):
             p.requires_grad = False
         self.opt = th.optim.Adam(self.predictor.parameters(), lr=learning_rate)
         self._rollout_next = []  # list of (B, obs_dim) normalized-next-obs arrays
+
+    def state_dict(self):
+        return {
+            **self._base_state_dict(),
+            "kind": "rnd",
+            "target": self.target.state_dict(),
+            "predictor": self.predictor.state_dict(),
+            "optimizer": self.opt.state_dict(),
+            "rollout_next": [np.array(x, copy=True) for x in self._rollout_next],
+        }
+
+    def load_state_dict(self, state):
+        if state.get("kind") != "rnd":
+            raise ValueError(f"Expected an RND checkpoint, got {state.get('kind')!r}")
+        self._load_base_state_dict(state)
+        self.target.load_state_dict(state["target"])
+        self.predictor.load_state_dict(state["predictor"])
+        self.opt.load_state_dict(state["optimizer"])
+        self._rollout_next = [
+            np.array(x, dtype=np.float32, copy=True) for x in state["rollout_next"]
+        ]
 
     def reward(self, prev_obs, actions, next_obs):
         flat = np.asarray(next_obs, dtype=np.float32)
@@ -116,6 +175,51 @@ class SharedLPMModel(_SharedBase):
         self.buffer_size = int(buffer_size)
         self.buf = []                 # (norm_prev: (obs_dim,), action:int, mse:float)
         self._rollout = []            # (norm_prev:(obs_dim,), action:int, norm_next:(obs_dim,))
+
+    def state_dict(self):
+        return {
+            **self._base_state_dict(),
+            "kind": "lpm",
+            "num_actions": self.num_actions,
+            "forward_model": self.forward_model.state_dict(),
+            "error_model": self.error_model.state_dict(),
+            "forward_optimizer": self.fwd_opt.state_dict(),
+            "error_optimizer": self.err_opt.state_dict(),
+            "buffer": [
+                (np.array(obs, copy=True), int(action), float(error))
+                for obs, action, error in self.buf
+            ],
+            "rollout": [
+                (np.array(prev, copy=True), int(action), np.array(nxt, copy=True))
+                for prev, action, nxt in self._rollout
+            ],
+        }
+
+    def load_state_dict(self, state):
+        if state.get("kind") != "lpm":
+            raise ValueError(f"Expected an LPM checkpoint, got {state.get('kind')!r}")
+        self._load_base_state_dict(state)
+        if int(state["num_actions"]) != self.num_actions:
+            raise ValueError(
+                "Intrinsic checkpoint action count does not match the requested run: "
+                f"{state['num_actions']} != {self.num_actions}"
+            )
+        self.forward_model.load_state_dict(state["forward_model"])
+        self.error_model.load_state_dict(state["error_model"])
+        self.fwd_opt.load_state_dict(state["forward_optimizer"])
+        self.err_opt.load_state_dict(state["error_optimizer"])
+        self.buf = [
+            (np.array(obs, dtype=np.float32, copy=True), int(action), float(error))
+            for obs, action, error in state["buffer"]
+        ]
+        self._rollout = [
+            (
+                np.array(prev, dtype=np.float32, copy=True),
+                int(action),
+                np.array(nxt, dtype=np.float32, copy=True),
+            )
+            for prev, action, nxt in state["rollout"]
+        ]
 
     def _sa(self, norm_obs, actions):  # norm_obs:(B,obs_dim), actions:(B,)
         a = np.zeros((norm_obs.shape[0], self.num_actions), dtype=np.float32)
@@ -199,6 +303,43 @@ class SharedICMModel(_SharedBase):
                   + list(self.inverse_model.parameters()))
         self.opt = th.optim.Adam(params, lr=learning_rate)
         self._rollout = []  # (norm_prev:(obs_dim,), action:int, norm_next:(obs_dim,))
+
+    def state_dict(self):
+        return {
+            **self._base_state_dict(),
+            "kind": "icm",
+            "num_actions": self.num_actions,
+            "encoder": self.encoder.state_dict(),
+            "forward_model": self.forward_model.state_dict(),
+            "inverse_model": self.inverse_model.state_dict(),
+            "optimizer": self.opt.state_dict(),
+            "rollout": [
+                (np.array(prev, copy=True), int(action), np.array(nxt, copy=True))
+                for prev, action, nxt in self._rollout
+            ],
+        }
+
+    def load_state_dict(self, state):
+        if state.get("kind") != "icm":
+            raise ValueError(f"Expected an ICM checkpoint, got {state.get('kind')!r}")
+        self._load_base_state_dict(state)
+        if int(state["num_actions"]) != self.num_actions:
+            raise ValueError(
+                "Intrinsic checkpoint action count does not match the requested run: "
+                f"{state['num_actions']} != {self.num_actions}"
+            )
+        self.encoder.load_state_dict(state["encoder"])
+        self.forward_model.load_state_dict(state["forward_model"])
+        self.inverse_model.load_state_dict(state["inverse_model"])
+        self.opt.load_state_dict(state["optimizer"])
+        self._rollout = [
+            (
+                np.array(prev, dtype=np.float32, copy=True),
+                int(action),
+                np.array(nxt, dtype=np.float32, copy=True),
+            )
+            for prev, action, nxt in state["rollout"]
+        ]
 
     def _action_one_hot(self, actions):
         a = np.zeros((len(actions), self.num_actions), dtype=np.float32)

@@ -16,9 +16,9 @@ This is a top-level convenience launcher for:
 
 The underlying `minigrid_exp/run_grid.py` treats `none` and `entropy` as the
 baseline methods, and treats `rnd`, `lpm`, and `icm` as intrinsic methods.
-Training is chunked and resumable: each call to `run_grid.py` advances every
-pending cell by one chunk, so this script runs repeated rounds until the
-requested progress sidecars are complete.
+Training is chunked and resumable. Each worker commits PPO and intrinsic state
+together, and repeated rounds restore that complete learning state before the
+next chunk.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent
 EXP = ROOT / "minigrid_exp"
 RUNNER = EXP / "run_grid.py"
 ANALYZER = EXP / "analyze.py"
-DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp3"
+DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp3_final"
 
 ENV_BUDGETS = {
     "MiniGrid-DoorKey-5x5-v0": 1_000_000,
@@ -195,6 +195,19 @@ def _analyze(args: argparse.Namespace) -> int:
     return int(res.returncode)
 
 
+def _preflight(args: argparse.Namespace) -> int:
+    py = args.python_path or _venv_python()
+    tests = [
+        EXP / "tests" / "test_checkpointing.py",
+        EXP / "tests" / "test_intrinsic_models.py",
+        EXP / "tests" / "test_intrinsic_vec_wrapper.py",
+    ]
+    cmd = [py, "-m", "pytest", *[str(path) for path in tests], "-q"]
+    print(f"[expr3] checkpoint preflight: {' '.join(cmd)}", flush=True)
+    res = subprocess.run(cmd, cwd=str(ROOT), env=_base_env(args))
+    return int(res.returncode)
+
+
 def _print_plan(args: argparse.Namespace, env_steps: dict[str, int], cells: list[dict]) -> None:
     cfg = _load_minigrid_config(args)
     variants = args.variants or DEFAULT_VARIANTS
@@ -245,11 +258,13 @@ def main() -> int:
                     help="skip training and only aggregate existing eval outputs")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not run analyze.py after completion")
+    ap.add_argument("--no-preflight", action="store_true",
+                    help="skip the checkpoint/resume tests before training")
     ap.add_argument("--python", dest="python_path",
                     help="Python executable for run_grid.py, train_one.py, and analyze.py")
     ap.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
                     help="experiment root containing results/ and figures/ "
-                         "(default: expr_data/minigrid/exp3)")
+                         "(default: expr_data/minigrid/exp3_final)")
     ap.add_argument("--envs", nargs="+", choices=sorted(ENV_BUDGETS),
                     help="restrict to specific MiniGrid env ids")
     ap.add_argument("--variants", nargs="+", choices=DEFAULT_VARIANTS,
@@ -290,6 +305,12 @@ def main() -> int:
                 if rc != 0:
                     return rc
         return 0
+
+    if not args.no_preflight:
+        rc = _preflight(args)
+        if rc != 0:
+            print("[expr3] preflight failed; training was not started")
+            return rc
 
     max_rounds = args.rounds or max(
         math.ceil(steps / args.chunk_steps) for steps in env_steps.values())

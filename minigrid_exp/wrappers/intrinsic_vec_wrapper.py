@@ -57,3 +57,42 @@ class IntrinsicVecWrapper(VecEnvWrapper):
         if self._steps % self.n_steps == 0:
             self.model.update()
         return obs, rews, dones, infos
+
+    def checkpoint_state(self):
+        """Return the complete curiosity-wrapper state for crash-safe resume."""
+        return {
+            "version": 1,
+            "n_steps": self.n_steps,
+            "model": self.model.state_dict(),
+            "last_obs": None if self._last_obs is None else self._last_obs.copy(),
+            "last_actions": (
+                None if self._last_actions is None else self._last_actions.copy()
+            ),
+            "episode_intrinsic": self._ep_intr.copy(),
+            "steps": self._steps,
+        }
+
+    def load_checkpoint_state(self, state):
+        if state.get("version") != 1:
+            raise ValueError(
+                f"Unsupported intrinsic-wrapper checkpoint version: {state.get('version')!r}"
+            )
+        if int(state["n_steps"]) != self.n_steps:
+            raise ValueError(
+                f"Checkpoint n_steps={state['n_steps']} does not match {self.n_steps}"
+            )
+        self.model.load_state_dict(state["model"])
+        self._last_obs = (
+            None
+            if state["last_obs"] is None
+            else np.array(state["last_obs"], dtype=np.float32, copy=True)
+        )
+        self._last_actions = (
+            None
+            if state["last_actions"] is None
+            else np.array(state["last_actions"], copy=True)
+        )
+        self._ep_intr = np.array(
+            state["episode_intrinsic"], dtype=np.float64, copy=True
+        )
+        self._steps = int(state["steps"])

@@ -94,3 +94,24 @@ def test_ep_intrinsic_logged_at_episode_end():
         if saw_ep:
             break
     assert saw_ep
+
+
+def test_wrapper_checkpoint_roundtrip_preserves_curiosity_state():
+    source, _ = _wrap("lpm", n_steps=8, n=2)
+    source.reset()
+    for _ in range(3):
+        source.step_async(np.array([source.action_space.sample() for _ in range(2)]))
+        source.step_wait()
+    state = source.checkpoint_state()
+
+    restored, _ = _wrap("lpm", n_steps=8, n=2)
+    restored.load_checkpoint_state(state)
+    assert restored._steps == source._steps
+    assert np.array_equal(restored._last_obs, source._last_obs)
+    assert np.array_equal(restored._last_actions, source._last_actions)
+    assert np.array_equal(restored._ep_intr, source._ep_intr)
+    assert restored.model.obs_rms.count == source.model.obs_rms.count
+    assert len(restored.model.buf) == len(source.model.buf)
+
+    source.close()
+    restored.close()

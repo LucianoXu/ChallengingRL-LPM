@@ -40,16 +40,24 @@ python expr3.py
 This previews 3 environments x clean/noisy x 5 visible methods
 (`none`, `entropy`, `rnd`, `lpm`, `icm`) x 3 seeds. The launcher delegates to
 `run_grid.py`, so training is checkpointed and resumable by progress sidecars.
-Start the actual chunked run with:
+Each chunk commits a complete-state resume slot containing the PPO archive,
+curiosity networks/optimizers/statistics/buffers, and RNG state. The next chunk
+restores that learning state instead of rebuilding curiosity from scratch.
+Start the actual run with:
 
 ```bash
 python expr3.py --run --python ./LPM_exploration/.venv/bin/python
 ```
 
+Before launching the expensive grid, `expr3.py` runs focused checkpoint,
+intrinsic-state roundtrip, and two-chunk PPO resume tests. A failure stops the
+launcher before any experiment cell starts. `expr4.py` performs the same guard.
+
 Defaults: DoorKey-5x5 uses 1M steps/run, FourRooms uses 2M steps/run, and
-MultiRoom-N6 uses 3M steps/run; chunks are 300k steps. Re-run the same command
-to resume incomplete cells. After all cells complete, `expr3.py` runs
-`analyze.py` automatically.
+MultiRoom-N6 uses 3M steps/run; checkpoints are written every 300k steps. Re-run
+the same command to resume incomplete cells. After all cells complete, `expr3.py` runs
+`analyze.py` automatically. The corrected launcher writes to
+`expr_data/minigrid/exp3_final` by default, leaving earlier data untouched.
 
 Use `expr4.py` for the heavier MiniGrid hyperparameter sweeps:
 
@@ -57,6 +65,9 @@ Use `expr4.py` for the heavier MiniGrid hyperparameter sweeps:
 python expr4.py
 python expr4.py --run --python ./LPM_exploration/.venv/bin/python
 ```
+
+The corrected sweep launcher writes to `expr_data/minigrid/exp4_final` by
+default, leaving earlier data untouched.
 
 It launches two resumable sweep families:
 

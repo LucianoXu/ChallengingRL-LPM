@@ -51,7 +51,10 @@ def run_cell(cmd, logfile, threads):
     tvars = {k: str(threads) for k in
              ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
               "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")}
-    with open(logfile, "w") as fh:
+    # Append so a crash/retry keeps the earlier diagnostic output.
+    with open(logfile, "a") as fh:
+        fh.write(f"\n=== launch: {' '.join(cmd)} ===\n")
+        fh.flush()
         return subprocess.run(cmd, cwd=EXP, stdout=fh, stderr=subprocess.STDOUT,
                               env={**os.environ, "PYTHONPATH": EXP, **tvars}).returncode
 

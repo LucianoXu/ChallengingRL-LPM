@@ -16,8 +16,8 @@ Included sweeps:
 2. FourRooms observation-noise sweep for none/entropy/RND/LPM/ICM:
    noise_prob in {0, 0.01, 0.02, ..., 0.10}
 
-Training is chunked and resumable via the same progress sidecars used by
-`minigrid_exp/run_grid.py`.
+Training uses chunk workers with complete-state checkpoints and resumes via the
+same progress sidecars used by `minigrid_exp/run_grid.py`.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent
 EXP = ROOT / "minigrid_exp"
 RUNNER = EXP / "run_grid.py"
 ANALYZER = EXP / "analyze.py"
-DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp4"
+DEFAULT_OUTPUT_DIR = ROOT / "expr_data" / "minigrid" / "exp4_final"
 
 FOURROOMS = "MiniGrid-FourRooms-v0"
 MULTIROOM = "MiniGrid-MultiRoom-N6-v0"
@@ -217,6 +217,19 @@ def _analyze(args: argparse.Namespace) -> int:
     return int(res.returncode)
 
 
+def _preflight(args: argparse.Namespace) -> int:
+    py = args.python_path or _venv_python()
+    tests = [
+        EXP / "tests" / "test_checkpointing.py",
+        EXP / "tests" / "test_intrinsic_models.py",
+        EXP / "tests" / "test_intrinsic_vec_wrapper.py",
+    ]
+    cmd = [py, "-m", "pytest", *[str(path) for path in tests], "-q"]
+    print(f"[expr4] checkpoint preflight: {' '.join(cmd)}", flush=True)
+    res = subprocess.run(cmd, cwd=str(ROOT), env=_base_env(args))
+    return int(res.returncode)
+
+
 def _print_plan(specs: list[SweepSpec], cells: list[dict], args: argparse.Namespace) -> None:
     pending = _incomplete(cells, args)
     print("[expr4] MiniGrid hyperparameter sweeps")
@@ -256,11 +269,13 @@ def main() -> int:
                     help="skip training and only aggregate existing eval outputs")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not run analyze.py after completion")
+    ap.add_argument("--no-preflight", action="store_true",
+                    help="skip the checkpoint/resume tests before training")
     ap.add_argument("--python", dest="python_path",
                     help="Python executable for run_grid.py, train_one.py, and analyze.py")
     ap.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
                     help="experiment root containing results/ and figures/ "
-                         "(default: expr_data/minigrid/exp4)")
+                         "(default: expr_data/minigrid/exp4_final)")
     ap.add_argument("--sweeps", nargs="+", choices=["beta", "noise"],
                     default=["beta", "noise"])
     ap.add_argument("--methods", nargs="+", default=list(DEFAULT_METHODS),
@@ -297,6 +312,12 @@ def main() -> int:
                 if rc != 0:
                     return rc
         return 0
+
+    if not args.no_preflight:
+        rc = _preflight(args)
+        if rc != 0:
+            print("[expr4] preflight failed; training was not started")
+            return rc
 
     max_rounds = args.rounds or max(math.ceil(spec.steps / args.chunk_steps) for spec in specs)
     for round_idx in range(1, max_rounds + 1):
