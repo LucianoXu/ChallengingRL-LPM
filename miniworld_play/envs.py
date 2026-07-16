@@ -21,10 +21,11 @@ upstream notebooks so a human plays exactly what the agent trains against.
 
 from __future__ import annotations
 
+import glob
 import math
 import os
 import random
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 from gymnasium import spaces, utils
@@ -41,6 +42,14 @@ _DEFAULT_CIFAR_ROOT = os.path.join(
     "Miniworld",
     "data",
 )
+
+# Pre-extracted CIFAR-10 image folder (fast.ai layout: <root>/cifar10/train/<class>/*.png).
+# We read PNGs straight off disk so pressing "N" during play never blocks the UI
+# thread on a network download — the University-of-Toronto pickle mirror is
+# frequently throttled to ~1 kB/s. Fetch once with:
+#   curl -L -o <root>/cifar10.tgz https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz
+#   tar -xzf <root>/cifar10.tgz -C <root>
+_CIFAR_IMAGE_SUBDIR = "cifar10"
 
 
 def _replace_green_with_random(observation: np.ndarray) -> np.ndarray:
@@ -237,41 +246,39 @@ class ActionNoiseEnv(_BaseMazeEnv):
         super().__init__(**kwargs)
         self.sticky_prob = float(sticky_prob)
         self._cifar_root = cifar_root or _DEFAULT_CIFAR_ROOT
-        self._cifar_dataset = None  # lazy
+        self._cifar_paths: Optional[List[str]] = None  # lazy; [] means "none on disk"
 
-    def _ensure_cifar(self):
-        if self._cifar_dataset is None:
-            try:
-                import torchvision
-                import torchvision.transforms as transforms
-            except ImportError as e:  # pragma: no cover
-                raise RuntimeError(
-                    "ActionNoiseEnv needs torchvision for CIFAR-10. "
-                    "Install with: uv pip install --python <venv> torchvision"
-                ) from e
+    def _ensure_cifar(self) -> List[str]:
+        """Return a list of CIFAR-10 PNG paths found on disk (never downloads).
 
-            transform = transforms.Compose([transforms.ToTensor()])
-            os.makedirs(self._cifar_root, exist_ok=True)
-            try:
-                self._cifar_dataset = torchvision.datasets.CIFAR10(
-                    root=self._cifar_root, train=True, download=True, transform=transform,
-                )
-            except Exception as e:  # network failure → fall back to synthetic
+        Reads the pre-extracted fast.ai image folder so that "look at the noisy
+        TV" stays a local disk read — the UI thread must never block on the
+        (frequently throttled) Toronto pickle mirror. If no images are present
+        the caller falls back to synthetic high-entropy patches.
+        """
+        if self._cifar_paths is None:
+            img_dir = os.path.join(self._cifar_root, _CIFAR_IMAGE_SUBDIR)
+            paths = sorted(glob.glob(os.path.join(img_dir, "**", "*.png"), recursive=True))
+            if not paths:
                 print(
-                    f"[ActionNoiseEnv] CIFAR-10 download failed ({e}); "
-                    "falling back to synthetic noise patches."
+                    f"[ActionNoiseEnv] no CIFAR-10 images under {img_dir}; "
+                    "falling back to synthetic noise patches. To enable real "
+                    "frames, fetch the fast.ai mirror:\n"
+                    f"  curl -L -o {self._cifar_root}/cifar10.tgz "
+                    "https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz\n"
+                    f"  tar -xzf {self._cifar_root}/cifar10.tgz -C {self._cifar_root}"
                 )
-                self._cifar_dataset = None
-        return self._cifar_dataset
+            self._cifar_paths = paths
+        return self._cifar_paths
 
     def _random_cifar_obs(self) -> np.ndarray:
         from PIL import Image
-        ds = self._ensure_cifar()
-        if ds is not None:
-            idx = random.randint(0, len(ds) - 1)
-            image, _ = ds[idx]
-            arr = (image.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-            pil = Image.fromarray(arr).resize((self.OBS_WIDTH, self.OBS_HEIGHT), Image.Resampling.BILINEAR)
+        paths = self._ensure_cifar()
+        if paths:
+            path = paths[random.randint(0, len(paths) - 1)]
+            pil = Image.open(path).convert("RGB").resize(
+                (self.OBS_WIDTH, self.OBS_HEIGHT), Image.Resampling.BILINEAR
+            )
             return np.array(pil)
         # Fallback: synthetic high-entropy patches
         return np.random.randint(0, 256, size=(self.OBS_HEIGHT, self.OBS_WIDTH, 3), dtype=np.uint8)

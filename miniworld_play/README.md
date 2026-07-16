@@ -29,8 +29,19 @@ uv pip install --python LPM_exploration/.venv/bin/python \
     gymnasium miniworld pygame Pillow torchvision torch numpy
 ```
 
-CIFAR-10 (only needed for `action_noise` when you press **N**) is downloaded
-on first use to `LPM_exploration/Miniworld/data/` (~170 MB, gitignored).
+CIFAR-10 is only needed for `action_noise` when you press **N** ("look at the
+noisy TV"). The tool reads pre-extracted PNGs straight off disk — it never
+downloads during play, because the University-of-Toronto pickle mirror that
+`torchvision` uses is frequently throttled to ~1 kB/s and would freeze the UI.
+If the images aren't present, `N` silently falls back to synthetic random-RGB
+patches. To enable the real frames, fetch the fast.ai mirror once (~135 MB,
+~20 MB/s, extracts to `LPM_exploration/Miniworld/data/cifar10/`, gitignored):
+
+```bash
+DATA=LPM_exploration/Miniworld/data
+curl -L -o "$DATA/cifar10.tgz" https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz
+tar -xzf "$DATA/cifar10.tgz" -C "$DATA" && rm "$DATA/cifar10.tgz"
+```
 
 ## Run
 
